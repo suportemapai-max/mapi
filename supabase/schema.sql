@@ -416,3 +416,60 @@ to authenticated;
 grant execute on function
   public.abrir_link(uuid), public.status_link(uuid), public.registrar_evento_link(uuid, text)
 to anon, authenticated;
+-- ---------- catálogo de incidentes ----------
+create sequence if not exists public.incidentes_seq;
+create table if not exists public.incidentes (
+  id             text primary key,
+  blob           jsonb not null,
+  criado_em      timestamptz not null default now(),
+  atualizado_em  timestamptz not null default now(),
+  criado_por     uuid,
+  atualizado_por uuid
+);
+alter table public.incidentes enable row level security;
+revoke all on public.incidentes from anon, authenticated;
+revoke all on sequence public.incidentes_seq from anon, authenticated;
+
+create or replace function public.listar_incidentes() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis;
+begin
+  p := public._perfil_ativo();
+  perform public._log(p.id, p.email, 'incidentes_carregados', null, null, null, null);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', id, 'blob', blob, 'criado_em', criado_em, 'atualizado_em', atualizado_em) order by id desc) from public.incidentes), '[]'::jsonb);
+end $$;
+
+create or replace function public.novo_id_incidente() returns text
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis;
+begin
+  p := public._perfil_ativo();
+  if p.papel not in ('admin', 'suporte') then raise exception 'sem_permissao' using errcode = '42501'; end if;
+  return 'MAPI' || lpad(nextval('public.incidentes_seq')::text, 4, '0');
+end $$;
+
+create or replace function public.salvar_incidente(p_id text, p_blob jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis; novo boolean;
+begin
+  p := public._perfil_ativo();
+  if p.papel not in ('admin', 'suporte') then raise exception 'sem_permissao' using errcode = '42501'; end if;
+  if p_id !~ '^MAPI[0-9]{4,}$' then raise exception 'id_invalido'; end if;
+  novo := not exists (select 1 from public.incidentes where id = p_id);
+  insert into public.incidentes (id, blob, criado_por, atualizado_por) values (p_id, p_blob, p.id, p.id)
+  on conflict (id) do update set blob = excluded.blob, atualizado_por = p.id, atualizado_em = now();
+  perform public._log(p.id, p.email, case when novo then 'incidente_criado' else 'incidente_editado' end, p_id, null, null, null);
+end $$;
+
+create or replace function public.excluir_incidente(p_id text) returns void
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis;
+begin
+  p := public._perfil_ativo();
+  if p.papel <> 'admin' then raise exception 'somente_admin' using errcode = '42501'; end if;
+  delete from public.incidentes where id = p_id;
+  perform public._log(p.id, p.email, 'incidente_excluido', p_id, null, null, null);
+end $$;
+
+revoke all on function public.listar_incidentes(), public.novo_id_incidente(), public.salvar_incidente(text, jsonb), public.excluir_incidente(text) from public, anon, authenticated;
+grant execute on function public.listar_incidentes(), public.novo_id_incidente(), public.salvar_incidente(text, jsonb), public.excluir_incidente(text) to authenticated;

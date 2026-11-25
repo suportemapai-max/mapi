@@ -11,6 +11,10 @@ Recursos: login por e-mail, perfis (admin, suporte, leitura), permissão por cli
 Publicação: Settings → Pages → Deploy from a branch → `main` / root.
 
 
+## Catálogo de incidentes
+
+Menu lateral em dois grupos: ACESSOS e CATÁLOGO DE INCIDENTES. Incidentes (MAPI0001+) ficam criptografados com a mesma chave do cofre; criar/editar: admin e suporte, excluir: admin. Aplique `supabase/schema.sql` (bloco "catálogo de incidentes").
+
 ## Authenticator
 - No primeiro login cada usuário lê um QR Code no Google Authenticator e confirma o código. Depois, todo login pede o código.
 - O bloqueio por inatividade também pede o código de novo.

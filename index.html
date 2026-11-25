@@ -255,6 +255,16 @@ nav .badge{background:#e0652f;color:#fff}
 .who{color:var(--mut)}
 .qr{background:#fff;border-radius:12px;padding:10px;display:inline-block;margin:6px 0 10px}.qr img{width:180px;height:180px;display:block}
 details.sec{color:#eaf6ff;margin:4px 0 10px;font-size:13px}details.sec code{display:block;background:rgba(255,255,255,.15);padding:8px;border-radius:8px;word-break:break-all;margin-top:6px;user-select:all}
+nav h6.grp{margin:14px 10px 4px;font-size:12px;color:#fff;opacity:.9;border-top:1px solid rgba(255,255,255,.2);padding-top:12px}nav h6.grp:first-child{border:0;padding-top:0;margin-top:2px}
+.inc .sevs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.inc .sev{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:4px solid;border-radius:10px;padding:10px 12px;color:var(--tx);position:relative}
+.inc .sev.on{background:var(--acc-bg)}.inc .sev span{font-size:12px;color:var(--mut)}.inc .sev i{position:absolute;right:12px;top:8px;font-style:normal;font-size:20px;font-weight:700}
+.inc .stats{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}.inc .stats div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 16px}.inc .stats b{font-size:20px;margin-right:8px}.inc .stats span{color:var(--mut);font-size:12px}
+.inc .isrch{display:flex;gap:8px;margin-bottom:10px}.inc .isrch input{flex:1}
+.icard{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}.ih{display:flex;gap:12px;align-items:center;padding:10px 14px;cursor:pointer}.idt{font-weight:600;color:var(--acc)}.idesc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ib2{padding:4px 14px 14px;display:grid;gap:10px}.rich{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:4px;overflow:auto}.rich img,.rte img{max-width:100%;height:auto;border-radius:6px}.acts{display:flex;gap:8px}
+.rte{border:1px solid var(--line);border-radius:0 0 8px 8px;padding:8px 10px;background:var(--panel);overflow:auto;max-height:260px}.rtb{display:flex;gap:4px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;padding:4px}.rtb button{border:1px solid var(--line);background:var(--panel);color:var(--tx);border-radius:6px;padding:2px 8px;font-size:12px}
+.inc .isrch input{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--tx)}
 </style>
 </head>
 <body>
@@ -350,7 +360,7 @@ function bump() { clearTimeout(S.idle); if (S.unlocked && !(AUTO && !SERVER)) S.
 ['mousemove','keydown','click','scroll','touchstart'].forEach(e => addEventListener(e, bump, {passive:true}));
 function lock(msg) {
   if (SERVER) return lockSrv(msg);
-  S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
+  S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
   const d = $('#dlg'); if (d && d.open) d.close();
   renderLock(msg || '');
 }
@@ -436,10 +446,10 @@ function audit() {
 /* ---------- renderização ---------- */
 function render() {
   if (!S.unlocked) return;
-  const list = visible(), aud = S.cat === 'Auditoria';
-  if (!aud && (!S.sel || !S.recs.find(r => r.id === S.sel)) && !S.mob) S.sel = list[0]?.id || null;
-  if (!aud && S.sel && !list.find(r => r.id === S.sel) && !S.mob) S.sel = list[0]?.id || null;
-  const nav = CATS.map(([k, n, ic]) => `<button data-a="cat" data-v="${k}" class="${S.cat === k ? 'on' : ''}" title="${n}">${I(ic, 17)}<span>${n}</span><span class="n">${counts(k)}</span></button>`).join('');
+  const inc = S.sec === 'inc', list = visible(), aud = !inc && S.cat === 'Auditoria';
+  if (!inc && !aud && (!S.sel || !S.recs.find(r => r.id === S.sel)) && !S.mob) S.sel = list[0]?.id || null;
+  if (!inc && !aud && S.sel && !list.find(r => r.id === S.sel) && !S.mob) S.sel = list[0]?.id || null;
+  const nav = CATS.map(([k, n, ic]) => `<button data-a="cat" data-v="${k}" class="${!inc && S.cat === k ? 'on' : ''}" title="${n}">${I(ic, 17)}<span>${n}</span><span class="n">${counts(k)}</span></button>`).join('');
   const nAud = audit().reused.length;
   const prevQ = document.activeElement?.id === 'q' ? [$('#q').selectionStart] : null;
   $('#app').innerHTML = `<div class="shell">
@@ -449,14 +459,14 @@ function render() {
       ${S.q ? `<button class="ib clr" data-a="clr" title="Limpar (Esc)">${I('x', 14)}</button>` : ''}<kbd>/</kbd></div>
     <span class="sp"></span>
     <button class="ib" data-a="theme" title="Tema: ${S.theme}">${I(S.theme === 'dark' ? 'moon' : 'sun', 18)}</button>
-    ${canWrite() ? `<button class="btn pri" data-a="new">${I('plus', 15)}<span class="hide-m">Novo</span></button>` : ''}
+    ${canWrite() && !inc ? `<button class="btn pri" data-a="new">${I('plus', 15)}<span class="hide-m">Novo</span></button>` : ''}
     <div class="menu"><button class="btn" data-a="menu" aria-label="Mais opções">${I('more', 16)}</button>${S.menu ? menuHtml() : ''}</div>
     ${(AUTO && !SERVER) ? '' : `<button class="ib" data-a="lock" title="Bloquear">${I('lock', 18)}</button>`}
     ${SERVER ? `<span class="who hide-m" title="${esc(S.me.email)}">${esc(S.me.email)} <span class="chip">${esc(S.me.papel)}</span></span><button class="btn sm" data-sv="logout">Sair</button>` : ''}
   </header>
   <div class="main ${S.mob ? 'showd' : ''}">
-    <nav>${nav}<h6>Análise</h6><button data-a="cat" data-v="Auditoria" class="${aud ? 'on' : ''}" title="Auditoria de senhas">${I('shield', 17)}<span>Auditoria</span>${nAud ? `<span class="badge">${nAud}</span>` : ''}</button></nav>
-    ${aud ? `<div class="detail" style="grid-column:2/4">${auditHtml()}</div>` :
+    <nav><h6 class="grp">Acessos</h6>${nav}<h6>Análise</h6><button data-a="cat" data-v="Auditoria" class="${aud ? 'on' : ''}" title="Auditoria de senhas">${I('shield', 17)}<span>Auditoria</span>${nAud ? `<span class="badge">${nAud}</span>` : ''}</button>${incNavHtml()}</nav>
+    ${inc ? incMain() : aud ? `<div class="detail" style="grid-column:2/4">${auditHtml()}</div>` :
     `<div class="list" id="lst"><div class="lh"><span>${list.length} ${list.length === 1 ? 'registro' : 'registros'}${S.q ? ' encontrados' : ''}</span><span class="hide-m"><span class="kbd">↑</span> <span class="kbd">↓</span> navegar</span></div>${listHtml(list)}</div>
      <div class="detail" id="det">${S.sel ? detailHtml(S.recs.find(r => r.id === S.sel)) : emptyHtml()}</div>`}
   </div></div>`;
@@ -657,7 +667,7 @@ document.addEventListener('click', async e => {
   if (S.menu && !e.target.closest('.menu')) { S.menu = false; render(); }
   if (!t || !S.unlocked) return;
   const a = t.dataset.a, v = t.dataset.v, keep = () => { const y = $('#det')?.scrollTop, l = $('#lst')?.scrollTop; render(); if ($('#det') && y) $('#det').scrollTop = y; if ($('#lst') && l) $('#lst').scrollTop = l; };
-  if (a === 'cat') { S.cat = v; S.sel = null; S.mob = false; render(); }
+  if (a === 'cat') { S.sec = 'acessos'; S.cat = v; S.sel = null; S.mob = false; render(); }
   else if (a === 'sel') { select(v); S._noscroll = true; keep(); S._noscroll = false; if ($('#det')) $('#det').scrollTop = 0; }
   else if (a === 'back') { S.mob = false; render(); }
   else if (a === 'goto') { S.cat = 'Todos'; S.q = ''; select(v); render(); }
@@ -688,7 +698,7 @@ document.addEventListener('click', async e => {
   else if (a === 'reset') { S.menu = false; if (confirm('Descartar edições feitas neste navegador e voltar ao conteúdo do arquivo?')) { localStorage.removeItem(LS); if (AUTO) location.reload(); else lock('Edições locais descartadas.'); } else render(); }
 });
 document.addEventListener('keydown', e => {
-  if (!S.unlocked || $('dialog[open]')) return;
+  if (!S.unlocked || $('dialog[open]') || S.sec === 'inc') return;
   const tag = document.activeElement.tagName, typing = /INPUT|TEXTAREA|SELECT/.test(tag);
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) { e.preventDefault(); $('#q')?.focus(); $('#q')?.select(); return; }
   if (e.key === 'Escape') { if (S.menu) { S.menu = false; render(); } else if (S.q) { S.q = ''; S.sel = null; render(); } return; }
@@ -837,7 +847,7 @@ async function openRec(key, blob, aad) {
 S.me = null;
 const canWrite = () => !SERVER || ['admin', 'suporte'].includes(S.me?.papel);
 const isAdmin = () => SERVER && S.me?.papel === 'admin';
-const EV = {cofre_aberto:'Abriu o cofre (chave liberada)', login:'Entrou', logout:'Saiu', abrir:'Abriu registro', revelar:'Revelou valor', copiar:'Copiou', exportar:'Exportou', bloqueio:'Bloqueio por inatividade',
+const EV = {incidentes_carregados:'Abriu o catálogo de incidentes', incidente_criado:'Criou incidente', incidente_editado:'Editou incidente', incidente_excluido:'Excluiu incidente', cofre_aberto:'Abriu o cofre (chave liberada)', login:'Entrou', logout:'Saiu', abrir:'Abriu registro', revelar:'Revelou valor', copiar:'Copiou', exportar:'Exportou', bloqueio:'Bloqueio por inatividade',
   carregar:'Carregou cofre', criar:'Criou registro', editar:'Editou registro', excluir:'Excluiu registro', importar:'Importou dados', permissao:'Alterou permissão',
   cofre_configurado:'Configurou o cofre', link_criado:'Criou link', link_revogado:'Cancelou link', link_aberto:'Link aberto', link_copiou:'Copiou (via link)'};
 
@@ -847,7 +857,7 @@ function logEv(tipo, reg, campo, detalhe) {
 }
 function trackOpen() {
   clearTimeout(S._ot); const id = S.sel;
-  if (!SERVER || !id || id === S._lastOpen) return;
+  if (!SERVER || !id || id === S._lastOpen || S.sec === 'inc') return;
   S._ot = setTimeout(() => { if (S.sel === id && S.unlocked) { S._lastOpen = id; logEv('abrir', id); } }, 1200);
 }
 const logCopy = (rid, campo) => logEv('copiar', rid, campo);
@@ -889,7 +899,7 @@ function renderMsg(title, text, extra = '') {
     <button class="btn" id="so">Sair</button>`);
   $('#so').onclick = () => srvLogout();
 }
-function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(LOCKED); S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
+function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(LOCKED); S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
 function renderTotp(factorId, msg) {
   $('#app').innerHTML = shell(`<form id="mf" autocomplete="off"><h1>Código do Authenticator</h1><p>${esc(S.me?.email || SB.sess?.email || '')}<br>Digite o código de 6 dígitos do Google Authenticator.</p>
     <input id="mc" inputmode="numeric" maxlength="7" placeholder="000000" autocomplete="one-time-code" autofocus style="text-align:center;letter-spacing:6px;font-size:20px">
@@ -963,7 +973,7 @@ async function reloadRecs() {
 }
 async function lockSrv(msg) {
   logEv('bloqueio'); try { sessionStorage.setItem(LOCKED, '1'); } catch {}
-  S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
+  S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
   const d = $('#dlg'); if (d && d.open) d.close();
   try { const v = ((await SB.user()).factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified'); v ? renderTotp(v.id, msg || '') : srvLogout(); } catch { srvLogout(); }
 }
@@ -1188,6 +1198,120 @@ async function autoUnlock() {
   }
   renderLock('Não foi possível abrir o cofre.');
 }
+
+/* ---------- catálogo de incidentes ---------- */
+const SEV = [['critical','Crítico','Crítico - Sistema Indisponível','04:00:00'],['high','Severo','Severo - Sistema Operando com Funções Parciais','12:00:00'],['medium','Médio','Médio - Sistema Operando com Degradação da Qualidade','24:00:00'],['low','Leve','Leve - Problema que não Impacta na Funcionalidade do Sistema','72:00:00']];
+const SEVC = {critical:'var(--bad)', high:'#e0652f', medium:'var(--warn)', low:'var(--ok)'};
+const sevOf = s => SEV.find(x => (s || '').startsWith(x[1])) || SEV[3];
+const IFIELDS = [['impacto','Impacto esperado'],['causa','Causa raiz'],['ferramentas','Ferramentas / instrumentação'],['descricao','Descrição do problema'],['acao','Ação corretiva']];
+const stripH = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return (d.textContent || '').trim(); };
+const OKT = new Set(['B','I','U','STRONG','EM','UL','OL','LI','P','BR','DIV','SPAN','A','IMG','H3','H4','PRE','CODE','TABLE','THEAD','TBODY','TR','TD','TH','BLOCKQUOTE','S','HR']);
+function cleanHtml(h) {
+  const doc = new DOMParser().parseFromString('<body>' + (h || '') + '</body>', 'text/html');
+  const walk = n => { [...n.childNodes].forEach(c => {
+    if (c.nodeType === 3) return;
+    if (c.nodeType !== 1 || !OKT.has(c.tagName)) { c.remove(); return; }
+    [...c.attributes].forEach(a => {
+      const k = a.name.toLowerCase(), v = a.value;
+      if (c.tagName === 'A' && k === 'href' && /^https?:/i.test(v)) return;
+      if (c.tagName === 'IMG' && k === 'src' && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(v)) return;
+      c.removeAttribute(a.name);
+    });
+    if (c.tagName === 'A') { c.setAttribute('target', '_blank'); c.setAttribute('rel', 'noopener noreferrer'); }
+    if (c.tagName === 'IMG' && !c.getAttribute('src')) { c.remove(); return; }
+    walk(c);
+  }); };
+  walk(doc.body); return doc.body.innerHTML;
+}
+function shrinkImg(file) { return new Promise(res => {
+  const fr = new FileReader(); fr.onload = () => { const im = new Image(); im.onload = () => {
+    const m = 1100, k = Math.min(1, m / Math.max(im.width, im.height)), c = document.createElement('canvas');
+    c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    res(c.toDataURL('image/jpeg', 0.72)); }; im.onerror = () => res(null); im.src = fr.result; };
+  fr.onerror = () => res(null); fr.readAsDataURL(file); }); }
+async function loadInc(force) {
+  if (!SERVER || (S.incLoaded && !force)) return;
+  S.incErr = '';
+  try {
+    const rows = await SB.rpc('listar_incidentes'), out = [];
+    for (const r of rows) { try { out.push({...(await openRec(S.key, r.blob, r.id)), id:r.id, criado:r.criado_em, atualizado:r.atualizado_em}); } catch { out.push({id:r.id, descricao:'(não foi possível descriptografar)', severidade:SEV[3][2], categoria:'?', subcategoria:'?', criado:r.criado_em}); } }
+    S.inc = out; S.incLoaded = true;
+  } catch (e) { S.incErr = errMsg(e); S.inc = []; }
+  render();
+}
+function goInc(view) { S.sec = 'inc'; S.incView = view; S.sel = null; S.mob = false; S.menu = false; if (!S.incLoaded) loadInc(); render(); }
+function incNavHtml() {
+  if (!SERVER) return '';
+  const on = v => S.sec === 'inc' && S.incView === v ? 'on' : '';
+  return `<h6 class="grp">Catálogo de incidentes</h6>
+    <button data-inc="painel" class="${on('painel')}">${I('warn', 17)}<span>Painel e consulta</span><span class="n">${S.inc?.length ?? ''}</span></button>
+    ${canWrite() ? `<button data-inc="novo" class="${on('novo')}">${I('plus', 17)}<span>Novo incidente</span></button>` : ''}`;
+}
+function incMain() {
+  const L = S.inc || [], cnt = k => L.filter(r => sevOf(r.severidade)[0] === k).length;
+  const t = (S.incQ || '').toLowerCase(), f = S.incSev || '';
+  const rows = L.filter(r => (!f || sevOf(r.severidade)[0] === f) && (!t || (r.id + ' ' + r.categoria + ' ' + r.subcategoria + ' ' + stripH(r.descricao) + ' ' + stripH(r.causa)).toLowerCase().includes(t)));
+  return `<div class="inc" style="grid-column:2/4;overflow:auto;padding:18px 22px">
+    <h2 style="margin:0 0 2px">Catálogo de incidentes</h2><p style="margin:0 0 14px;color:var(--mut)">Diagnóstico operacional e gestão de SLA · dados criptografados no servidor</p>
+    ${S.incErr ? `<p class="err">${esc(S.incErr)}</p>` : ''}
+    <div class="sevs">${SEV.map(([k, n, full, sla]) => `<button class="sev ${f === k ? 'on' : ''}" data-sevf="${k}" style="border-left-color:${SEVC[k]}"><b>${n}</b><span>SLA ${sla}</span><i>${cnt(k)}</i></button>`).join('')}</div>
+    <div class="stats"><div><b>${L.length}</b><span>Total de registros</span></div><div><b>${cnt('critical')}</b><span>Críticos</span></div><div><b>${cnt('high')}</b><span>Severos</span></div></div>
+    ${S.incView === 'novo' && canWrite() ? '' : `<div class="isrch"><input id="iq" placeholder="Buscar por ID, categoria ou descrição…" value="${esc(S.incQ || '')}" autocomplete="off"> ${f ? `<button class="btn sm" data-sevf="">Limpar filtro</button>` : ''}</div>
+    <div id="ilist">${rows.length ? rows.map(incCard).join('') : `<div class="empty"><b>${L.length ? 'Nenhum registro encontrado' : 'Nenhum incidente cadastrado'}</b><p>${canWrite() && !L.length ? 'Use “Novo incidente” no menu lateral.' : ''}</p></div>`}</div>`}
+  </div>`;
+}
+function incCard(r) {
+  const s = sevOf(r.severidade), open = S.incOpen === r.id;
+  return `<div class="icard"><div class="ih" data-iopen="${esc(r.id)}"><span class="mono idt">${esc(r.id)}</span><span class="idesc">${esc(stripH(r.descricao).slice(0, 140))}</span><span class="chip" style="color:${SEVC[s[0]]}">${s[1]}</span></div>
+  ${open ? `<div class="ib2"><div><b>Categoria:</b> ${esc(r.categoria)} / ${esc(r.subcategoria)} &nbsp; <b>SLA:</b> <span class="mono">${esc(r.tempo || s[3])}</span></div>
+    ${IFIELDS.map(([k, n]) => `<div><b>${n}:</b><div class="rich">${cleanHtml(r[k])}</div></div>`).join('')}
+    <div class="mut" style="font-size:12px">Criado em ${new Date(r.criado).toLocaleString('pt-BR')}</div>
+    <div class="acts">${canWrite() ? `<button class="btn sm" data-iedit="${esc(r.id)}">Editar</button>` : ''}${isAdmin() ? `<button class="btn sm danger" data-idel="${esc(r.id)}">Excluir</button>` : ''}</div></div>` : ''}</div>`;
+}
+async function incForm(id) {
+  if (!canWrite()) return toast('Seu perfil é somente leitura');
+  const r = id ? S.inc.find(x => x.id === id) : {};
+  let d = $('#idlg'); if (!d) { d = document.createElement('dialog'); d.id = 'idlg'; document.body.append(d); }
+  d.innerHTML = `<form class="dlg" method="dialog" autocomplete="off" style="max-width:820px"><h3>${id ? 'Editar ' + esc(id) : 'Novo incidente'}</h3>
+    <div class="two"><div class="f"><label>Categoria</label><input name="categoria" required value="${esc(r.categoria || '')}" placeholder="Ex: Automação, Rede"></div>
+    <div class="f"><label>Subcategoria</label><input name="subcategoria" required value="${esc(r.subcategoria || '')}" placeholder="Ex: CLP, Inversor, API"></div></div>
+    <div class="two"><div class="f"><label>Severidade</label><select name="severidade" required><option value="">Selecione</option>${SEV.map(s => `<option value="${esc(s[2])}" ${r.severidade === s[2] ? 'selected' : ''}>${esc(s[2])}</option>`).join('')}</select></div>
+    <div class="f"><label>Tempo R/R (SLA)</label><input name="tempo" readonly value="${esc(r.tempo || '')}"></div></div>
+    ${IFIELDS.map(([k, n]) => `<div class="f"><label>${n}</label><div class="rtb"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><button type="button" data-cmd="insertUnorderedList">• Lista</button><button type="button" data-cmd="insertOrderedList">1. Lista</button><button type="button" data-img="${k}">🖼 Imagem</button></div>
+      <div class="rte" contenteditable="true" data-k="${k}" style="min-height:90px">${cleanHtml(r[k])}</div></div>`).join('')}
+    <div class="row"><button type="button" class="btn" id="icancel">Cancelar</button><button class="btn pri" value="ok">Salvar</button></div></form>`;
+  const sel = d.querySelector('[name=severidade]'), tm = d.querySelector('[name=tempo]');
+  sel.onchange = () => { tm.value = SEV.find(s => s[2] === sel.value)?.[3] || ''; };
+  d.querySelectorAll('[data-cmd]').forEach(b => b.onmousedown = e => { e.preventDefault(); document.execCommand(b.dataset.cmd); });
+  const put = async (el, file) => { const u = await shrinkImg(file); if (u) { el.focus(); document.execCommand('insertImage', false, u); } };
+  d.querySelectorAll('[data-img]').forEach(b => b.onclick = () => { const el = d.querySelector(`.rte[data-k=${b.dataset.img}]`), fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.onchange = () => fi.files[0] && put(el, fi.files[0]); fi.click(); });
+  d.querySelectorAll('.rte').forEach(el => { el.addEventListener('paste', e => { const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith('image/')); if (f) { e.preventDefault(); put(el, f); } }); });
+  d.querySelector('#icancel').onclick = () => d.close();
+  d.querySelector('form').onsubmit = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target), o = {categoria:fd.get('categoria').trim(), subcategoria:fd.get('subcategoria').trim(), severidade:fd.get('severidade'), tempo:fd.get('tempo')};
+    if (!o.severidade) return toast('Escolha a severidade');
+    IFIELDS.forEach(([k]) => { o[k] = cleanHtml(d.querySelector(`.rte[data-k=${k}]`).innerHTML); });
+    try {
+      const nid = id || await SB.rpc('novo_id_incidente');
+      await SB.rpc('salvar_incidente', {p_id:nid, p_blob:await sealRec(S.key, o, nid)});
+      d.close(); toast(id ? 'Incidente atualizado' : 'Incidente ' + nid + ' criado'); S.incOpen = nid; S.incView = 'painel'; await loadInc(true);
+    } catch (er) { toast(errMsg(er)); }
+  };
+  d.showModal();
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-inc],[data-sevf],[data-iopen],[data-iedit],[data-idel]'); if (!t || !S.unlocked) return;
+  if (t.dataset.inc) { if (t.dataset.inc === 'novo') { goInc('painel'); incForm(null); } else goInc('painel'); }
+  else if (t.dataset.sevf !== undefined) { S.incSev = S.incSev === t.dataset.sevf ? '' : t.dataset.sevf; render(); }
+  else if (t.dataset.iopen) { S.incOpen = S.incOpen === t.dataset.iopen ? null : t.dataset.iopen; render(); }
+  else if (t.dataset.iedit) incForm(t.dataset.iedit);
+  else if (t.dataset.idel && confirm('Excluir ' + t.dataset.idel + '? Não dá para desfazer.')) {
+    try { await SB.rpc('excluir_incidente', {p_id:t.dataset.idel}); toast('Excluído'); S.incOpen = null; await loadInc(true); } catch (er) { toast(errMsg(er)); }
+  }
+});
+document.addEventListener('input', e => { if (e.target.id === 'iq') { S.incQ = e.target.value; const p = e.target.selectionStart; render(); const n = $('#iq'); n.focus(); n.setSelectionRange(p, p); } });
+
 if (VIEW) bootViewer(VIEW[1], VIEW[2]); else if (SERVER) bootServer(); else if (AUTO) autoUnlock(); else renderLock('');
 </script>
 </body>
