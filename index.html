@@ -900,6 +900,18 @@ function renderMsg(title, text, extra = '') {
   $('#so').onclick = () => srvLogout();
 }
 function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(LOCKED); S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
+function renderUnlock(msg) {
+  $('#app').innerHTML = shell(`<form id="uf" autocomplete="off"><h1>Sessão bloqueada</h1><p>${esc(S.me?.email || SB.sess?.email || '')}<br>Digite sua senha para continuar. O Authenticator só é pedido no login.</p>
+    <input id="up" type="password" placeholder="Senha" autocomplete="current-password" autofocus>
+    <p class="err" id="er">${esc(msg || '')}</p><button class="btn pri" id="go">Desbloquear</button>
+    <div class="alts"><button type="button" class="alt" id="so3">Sair da conta</button></div></form>`);
+  $('#so3').onclick = srvLogout;
+  $('#uf').onsubmit = async e => {
+    e.preventDefault(); const btn = $('#go'); btn.disabled = true;
+    try { await SB.raw('/auth/v1/token?grant_type=password', {body:{email:S.me?.email || SB.sess?.email, password:$('#up').value}}); sessionStorage.removeItem(LOCKED); await bootServer(true); }
+    catch (err) { btn.disabled = false; $('#er').textContent = errMsg(err); $('#up').select(); }
+  };
+}
 function renderTotp(factorId, msg) {
   $('#app').innerHTML = shell(`<form id="mf" autocomplete="off"><h1>Código do Authenticator</h1><p>${esc(S.me?.email || SB.sess?.email || '')}<br>Digite o código de 6 dígitos do Google Authenticator.</p>
     <input id="mc" inputmode="numeric" maxlength="7" placeholder="000000" autocomplete="one-time-code" autofocus style="text-align:center;letter-spacing:6px;font-size:20px">
@@ -948,7 +960,8 @@ async function bootServer(fresh) {
   if (!S.me) { SB.save(null); return renderAuth('Perfil não encontrado.'); }
   if (!S.me.ativo) return renderMsg('Aguardando liberação', 'Sua conta foi criada, mas um administrador ainda precisa liberar o acesso. Avise a equipe responsável.');
   if (!S.me.exige_mfa) { try { sessionStorage.removeItem(LOCKED); } catch {} }
-  else if (SB.aal() !== 'aal2' || sessionStorage.getItem(LOCKED)) {
+  else if (SB.aal() === 'aal2' && sessionStorage.getItem(LOCKED)) return renderUnlock();
+  else if (SB.aal() !== 'aal2') {
     let u; try { u = await SB.user(); } catch (e) { return renderAuth(errMsg(e)); }
     const v = (u.factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified');
     return v ? renderTotp(v.id) : renderEnroll();
@@ -976,8 +989,8 @@ async function lockSrv(msg) {
   logEv('bloqueio'); try { sessionStorage.setItem(LOCKED, '1'); } catch {}
   S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
   const d = $('#dlg'); if (d && d.open) d.close();
-  if (!S.me?.exige_mfa) return srvLogout();
-  try { const v = ((await SB.user()).factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified'); v ? renderTotp(v.id, msg || '') : srvLogout(); } catch { srvLogout(); }
+  if (!S.me?.exige_mfa || SB.aal() !== 'aal2') return srvLogout();
+  renderUnlock(msg || '');
 }
 
 /* ---------- gravação ---------- */
