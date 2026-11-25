@@ -269,6 +269,7 @@ nav h6.grp{margin:14px 10px 4px;font-size:12px;color:#fff;opacity:.9;border-top:
 </head>
 <body>
 <div id="app"></div>
+<script type="application/json" id="inc-seed">null</script>
 <script type="application/json" id="vault-blob">{}</script>
 <script>
 "use strict";
@@ -1251,6 +1252,7 @@ async function loadInc(force) {
     const rows = await SB.rpc('listar_incidentes'), out = [];
     for (const r of rows) { try { const o = await openRec(S.key, r.blob, r.id); out.push({...o, id:r.id, criado:o.criado_orig || r.criado_em, atualizado:r.atualizado_em}); } catch { out.push({id:r.id, descricao:'(não foi possível descriptografar)', severidade:SEV[3][2], categoria:'?', subcategoria:'?', criado:r.criado_em}); } }
     S.inc = out; S.incLoaded = true;
+    if (!out.length && isAdmin() && !localStorage.getItem('cofre_map_incseed')) { const sd = incSeed(); if (sd) { await importIncList(sd, true); return; } }
   } catch (e) { S.incErr = errMsg(e); S.inc = []; }
   render();
 }
@@ -1328,17 +1330,24 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('input', e => { if (e.target.id === 'iq') { S.incQ = e.target.value; const p = e.target.selectionStart; render(); const n = $('#iq'); n.focus(); n.setSelectionRange(p, p); } });
 
+const incSeed = () => { try { const d = JSON.parse($('#inc-seed')?.textContent || 'null'); return d && d.tipo === 'catalogo-incidentes' && d.registros?.length ? d : null; } catch { return null; } };
+async function importIncList(d, silent) {
+  const L = d.registros || []; let n = 0;
+  try {
+    for (const r of L) { const {id, ...o} = r; if (!/^MAPI\d{4,}$/.test(id)) continue; o.criado_orig = o.criado; delete o.criado; await SB.rpc('salvar_incidente', {p_id:id, p_blob:await sealRec(S.key, o, id)}); n++; }
+    if (n) { try { localStorage.setItem('cofre_map_incseed', '1'); } catch {} } toast(n + ' incidente(s) importado(s)' + (silent ? ' do arquivo' : ''));
+  } catch (e) { toast('Falha ao importar: ' + errMsg(e)); }
+  await loadInc(true);
+}
 async function importInc() {
   if (!canWrite()) return;
   const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,application/json';
   fi.onchange = async () => {
     try {
-      const d = JSON.parse(await fi.files[0].text()); const L = d.registros || [];
-      if (d.tipo !== 'catalogo-incidentes' || !L.length) return toast('Arquivo inválido');
-      if (!confirm('Importar ' + L.length + ' incidente(s)? IDs já existentes serão substituídos.')) return;
-      let n = 0;
-      for (const r of L) { const {id, ...o} = r; if (!/^MAPI\d{4,}$/.test(id)) continue; o.criado_orig = o.criado; delete o.criado; await SB.rpc('salvar_incidente', {p_id:id, p_blob:await sealRec(S.key, o, id)}); n++; }
-      toast(n + ' incidente(s) importado(s)'); await loadInc(true);
+      const d = JSON.parse(await fi.files[0].text());
+      if (d.tipo !== 'catalogo-incidentes' || !(d.registros || []).length) return toast('Arquivo inválido');
+      if (!confirm('Importar ' + d.registros.length + ' incidente(s)? IDs já existentes serão substituídos.')) return;
+      await importIncList(d, false);
     } catch (e) { toast('Falha ao importar: ' + errMsg(e)); }
   };
   fi.click();
