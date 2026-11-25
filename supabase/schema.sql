@@ -88,6 +88,7 @@ alter table public.links        enable row level security;
 
 revoke all on public.perfis, public.cofre_config, public.registros,
               public.permissoes, public.logs, public.links from anon, authenticated;
+revoke all on sequence public.logs_id_seq from anon, authenticated;
 
 -- ---------- novo usuário: perfil automático ----------
 -- O primeiro usuário que se cadastrar vira admin ativo. Os demais entram
@@ -134,7 +135,7 @@ begin
 end $$;
 
 revoke all on function public._perfil_ativo(), public._pode_ver(public.perfis, text),
-  public._log(uuid, text, text, text, text, text, uuid) from public, anon, authenticated;
+  public._log(uuid, text, text, text, text, text, uuid), public.tg_novo_usuario() from public, anon, authenticated;
 
 -- ---------- sessão / configuração ----------
 create or replace function public.meu_perfil() returns jsonb
