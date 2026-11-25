@@ -947,7 +947,8 @@ async function bootServer(fresh) {
   try { S.me = await SB.rpc('meu_perfil'); } catch (e) { return renderAuth(errMsg(e)); }
   if (!S.me) { SB.save(null); return renderAuth('Perfil não encontrado.'); }
   if (!S.me.ativo) return renderMsg('Aguardando liberação', 'Sua conta foi criada, mas um administrador ainda precisa liberar o acesso. Avise a equipe responsável.');
-  if (SB.aal() !== 'aal2' || sessionStorage.getItem(LOCKED)) {
+  if (!S.me.exige_mfa) { try { sessionStorage.removeItem(LOCKED); } catch {} }
+  else if (SB.aal() !== 'aal2' || sessionStorage.getItem(LOCKED)) {
     let u; try { u = await SB.user(); } catch (e) { return renderAuth(errMsg(e)); }
     const v = (u.factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified');
     return v ? renderTotp(v.id) : renderEnroll();
@@ -975,6 +976,7 @@ async function lockSrv(msg) {
   logEv('bloqueio'); try { sessionStorage.setItem(LOCKED, '1'); } catch {}
   S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
   const d = $('#dlg'); if (d && d.open) d.close();
+  if (!S.me?.exige_mfa) return srvLogout();
   try { const v = ((await SB.user()).factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified'); v ? renderTotp(v.id, msg || '') : srvLogout(); } catch { srvLogout(); }
 }
 

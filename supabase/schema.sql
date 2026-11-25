@@ -22,8 +22,10 @@ create table if not exists public.perfis (
   papel         text not null default 'leitura' check (papel in ('admin','suporte','leitura')),
   ativo         boolean not null default false,
   acesso_total  boolean not null default false,
+  exige_mfa     boolean not null default false,  -- true = precisa do Google Authenticator
   criado_em     timestamptz not null default now()
 );
+alter table public.perfis add column if not exists exige_mfa boolean not null default false;
 
 create table if not exists public.cofre_config (
   id          int primary key default 1 check (id = 1),
@@ -118,13 +120,13 @@ begin
   return v;
 end $$;
 
--- Exige sessão com Authenticator confirmado (aal2) para tudo que toca dados.
+-- Exige Authenticator (aal2) só de quem tem perfis.exige_mfa = true; os demais entram com e-mail e senha.
 create or replace function public._perfil_ativo() returns public.perfis
 language plpgsql stable security definer set search_path = public as $$
 declare v public.perfis;
 begin
   v := public._perfil_basico();
-  if coalesce(auth.jwt() ->> 'aal', '') <> 'aal2' then raise exception 'mfa_requerido' using errcode = '42501'; end if;
+  if v.exige_mfa and coalesce(auth.jwt() ->> 'aal', '') <> 'aal2' then raise exception 'mfa_requerido' using errcode = '42501'; end if;
   return v;
 end $$;
 
@@ -473,3 +475,6 @@ end $$;
 
 revoke all on function public.listar_incidentes(), public.novo_id_incidente(), public.salvar_incidente(text, jsonb), public.excluir_incidente(text) from public, anon, authenticated;
 grant execute on function public.listar_incidentes(), public.novo_id_incidente(), public.salvar_incidente(text, jsonb), public.excluir_incidente(text) to authenticated;
+
+-- Authenticator obrigatório apenas para Henrique Ribeiro:
+update public.perfis set exige_mfa = true where lower(email) = 'suportemapai@gmail.com';

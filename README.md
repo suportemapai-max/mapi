@@ -15,7 +15,11 @@ Publicação: Settings → Pages → Deploy from a branch → `main` / root.
 
 Menu lateral em dois grupos: ACESSOS e CATÁLOGO DE INCIDENTES. Incidentes (MAPI0001+) ficam criptografados com a mesma chave do cofre; criar/editar: admin e suporte, excluir: admin. Aplique `supabase/schema.sql` (bloco "catálogo de incidentes").
 
-## Authenticator
+## Authenticator (só para quem tem exige_mfa)
+
+O Authenticator é exigido apenas de perfis com `exige_mfa = true` (hoje: suportemapai@gmail.com). Para incluir outra pessoa: `update public.perfis set exige_mfa = true where email = '...';`
+
+## Authenticator (detalhes)
 - No primeiro login cada usuário lê um QR Code no Google Authenticator e confirma o código. Depois, todo login pede o código.
 - O bloqueio por inatividade também pede o código de novo.
 - Pré-requisito no Supabase: Authentication → Sign In / Providers → Multi-Factor → TOTP habilitado (padrão).
