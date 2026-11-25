@@ -981,7 +981,7 @@ async function openVault() {
   Object.assign(S, {unlocked:true, cat:'Todos', sel:null, dirty:false, _lastOpen:null}); bump(); render();
   if (isAdmin() && !S.recs.length) offerImport();
   applyAccPatch();
-  if (canWrite() && docsSeed() && !localStorage.getItem('cofre_map_docseed')) loadDocs();
+  if (canWrite() && docsSeed() && localStorage.getItem('cofre_map_docseed') !== docsSeed().seed) loadDocs();
   if (isAdmin() && incSeed() && !localStorage.getItem('cofre_map_incseed')) loadInc();
 }
 async function reloadRecs() {
@@ -1268,7 +1268,7 @@ function incNavHtml() {
   const on = v => S.sec === 'inc' && S.incView === v ? 'on' : '';
   return `<h6 class="grp">Catálogo de incidentes</h6>
     <button data-inc="painel" class="${on('painel')}">${I('warn', 17)}<span>Painel e consulta</span><span class="n">${S.inc?.length ?? ''}</span></button>
-    <button data-inc="docs" class="${on('docs')}">${I('note', 17)}<span>Views Injet (documentação)</span><span class="n">${(S.docs || []).length || ''}</span></button>
+    <button data-inc="docs" class="${on('docs')}">${I('note', 17)}<span>Documentação Injet</span><span class="n">${(S.docs || []).length || ''}</span></button>
     ${canWrite() ? `<button data-inc="novo" class="${on('novo')}">${I('plus', 17)}<span>Novo incidente</span></button>` : ''}`;
 }
 function incMain() {
@@ -1397,7 +1397,7 @@ async function loadDocs(force) {
     const rows = await SB.rpc('listar_documentos'), out = [];
     for (const r of rows) { try { out.push({...(await openRec(S.key, r.blob, r.id)), id:r.id}); } catch {} }
     S.docs = out; S.docsLoaded = true;
-    if (!out.length && canWrite() && !localStorage.getItem('cofre_map_docseed')) { const sd = docsSeed(); if (sd) { await importDocsList(sd); return; } }
+    if (canWrite()) { const sd = docsSeed(); if (sd && localStorage.getItem('cofre_map_docseed') !== sd.seed) { await importDocsList(sd); return; } }
   } catch (e) { S.docsErr = errMsg(e); S.docs = []; }
   render();
 }
@@ -1406,7 +1406,7 @@ async function importDocsList(d) {
   let n = 0;
   try {
     for (const x of d.docs) { await SB.rpc('salvar_documento', {p_id:x.id, p_blob:await sealRec(S.key, x, x.id)}); n++; }
-    try { localStorage.setItem('cofre_map_docseed', '1'); } catch {}
+    try { if (d.seed) localStorage.setItem('cofre_map_docseed', d.seed); } catch {}
     toast(n + ' documento(s) de views Injet importado(s)');
   } catch (e) { toast('Falha ao importar documentação: ' + errMsg(e)); }
   await loadDocs(true);
@@ -1415,12 +1415,13 @@ function docMatch(d, q) {
   if (!q) return {hit:true, fields:null, items:null};
   const t = norm(q), has = s => norm(s).includes(t);
   if (d.tipo === 'memorial') { const it = (d.itens || []).filter(i => has(i.ind) || has(i.desc)); return {hit:it.length > 0 || has(d.titulo), fields:null, items:it}; }
+  if (d.tipo === 'texto') { const sc = (d.secoes || []).filter(s => has(s.titulo) || has(s.texto)); return {hit:sc.length > 0 || has(d.titulo) || has(d.categoria), fields:null, items:null, secs:sc}; }
   if (d.tipo === 'geral') return {hit:has(d.titulo) || has(d.objetivo) || (d.observacoes || []).some(has), fields:null, items:null};
   const f = (d.campos || []).filter(c => has(c.campo) || has(c.desc) || has(c.tipo));
   return {hit:has(d.titulo) || has(d.descricao) || has(d.categoria) || f.length > 0, fields:f, items:null};
 }
 function docCard(d, q, open) {
-  const m = docMatch(d, q), isOpen = open || (q && (m.fields?.length || m.items?.length) && S.docOpen !== '-' + d.id);
+  const m = docMatch(d, q), isOpen = open || (q && (m.fields?.length || m.items?.length || m.secs?.length) && S.docOpen !== '-' + d.id);
   const tag = d.tipo === 'view' ? `<span class="chip">${esc(d.categoria)}</span>` : `<span class="chip">${esc(d.categoria)}</span>`;
   let body = '';
   if (isOpen) {
@@ -1430,38 +1431,53 @@ function docCard(d, q, open) {
         <div class="mut" style="font-size:12px">${d.campos.length} campos · ${d.campos.filter(c => c.agrup).length} de agrupamento · seção ${esc(d.secao)} do documento (pág. ${d.pagina}) · ${esc(d.origem)}</div>
         <div style="overflow:auto"><table class="tbl dtb"><thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead><tbody>${fl.map(c => `<tr><td class="mono">${esc(c.campo)}${c.agrup ? ' <span class="chip" title="Campo de agrupamento (amarelo no documento original)">agrup.</span>' : ''}</td><td class="mono">${esc(c.tipo)}</td><td>${esc(c.desc)}</td></tr>`).join('')}</tbody></table></div>
         ${fl.length < d.campos.length ? `<div class="mut" style="font-size:12px">Mostrando ${fl.length} de ${d.campos.length} campos que correspondem à busca.</div>` : ''}</div>`;
+    } else if (d.tipo === 'texto') {
+      const sl = q && m.secs?.length ? m.secs : (d.secoes || []);
+      body = `<div class="ib2">${d.descricao ? `<div>${esc(d.descricao)}</div>` : ''}${sl.map(s => `<div><b>${esc(s.titulo)}</b><div class="rich" style="white-space:pre-wrap">${esc(s.texto)}</div></div>`).join('')}<div class="mut" style="font-size:12px">Fonte: ${esc(d.origem || '')}</div></div>`;
     } else if (d.tipo === 'memorial') {
       const il = q && m.items?.length ? m.items : d.itens;
       body = `<div class="ib2"><div class="mut">${esc(d.nota)}</div>${[...new Set(il.map(i => i.grupo))].map(g => `<div><b>${esc(g)}</b>${il.filter(i => i.grupo === g).map(i => `<div class="rich"><b>${esc(i.ind)}</b><br>${esc(i.desc)}</div>`).join('')}</div>`).join('')}</div>`;
     } else body = `<div class="ib2"><div>${esc(d.objetivo)}</div><ul>${(d.observacoes || []).map(o => `<li>${esc(o)}</li>`).join('')}</ul><div class="mut" style="font-size:12px">Fonte: ${esc(d.origem)} (versão ${esc(d.versao)})</div></div>`;
   }
-  const sub = d.tipo === 'view' ? esc(d.descricao).slice(0, 110) : d.tipo === 'memorial' ? `${d.itens.length} indicadores e fórmulas` : 'Objetivo, observações e categorias';
+  const sub = d.tipo === 'view' ? esc(d.descricao).slice(0, 110) : d.tipo === 'texto' ? esc((d.descricao || d.secoes?.[0]?.titulo || '')).slice(0, 110) : d.tipo === 'memorial' ? `${d.itens.length} indicadores e fórmulas` : 'Objetivo, observações e categorias';
   return `<div class="icard"><div class="ih" data-dopen="${esc(d.id)}"><span class="mono idt">${esc(d.titulo.length > 30 ? d.titulo.slice(0, 30) + '…' : d.titulo)}</span><span class="idesc">${sub}${q && m.fields?.length ? ` · <b>${m.fields.length} campo(s) encontrado(s)</b>` : ''}</span>${tag}</div>${body}</div>`;
 }
 function docsMain() {
-  const D = S.docs || [], q = S.docQ || '', cat = S.docCat || '';
-  const cats = [...new Set(D.filter(d => d.tipo !== 'geral').map(d => d.categoria))];
-  const rows = D.filter(d => (!cat || d.categoria === cat) && docMatch(d, q).hit);
+  const D = S.docs || [], q = S.docQ || '', col = S.docCol || '', cat = S.docCat || '';
+  const colOf = d => d.colecao || 'Views Injet', cols = [...new Set(D.map(colOf))];
+  const inCol = D.filter(d => !col || colOf(d) === col);
+  const cats = [...new Set(inCol.filter(d => d.tipo !== 'geral').map(d => d.categoria))];
+  const rows = inCol.filter(d => (!cat || d.categoria === cat) && docMatch(d, q).hit);
   return `<div class="inc" style="grid-column:2/4;overflow:auto;padding:18px 22px">
-    <h2 style="margin:0 0 2px">Views Injet — documentação</h2><p style="margin:0 0 14px;color:var(--mut)">Views, campos, tipos e memorial de cálculo · fonte: Views_Injet_12_06_2024.pdf · dados criptografados no servidor</p>
+    <h2 style="margin:0 0 2px">Documentação Injet</h2><p style="margin:0 0 14px;color:var(--mut)">Documentos técnicos indexados para consulta · ${cols.length} documentação(ões) · dados criptografados no servidor</p>
     ${S.docsErr ? `<p class="err">${esc(S.docsErr)}</p>` : ''}
-    <div class="isrch"><input id="dq" placeholder="Buscar view, campo, indicador ou fórmula (ex.: OEE, cdmolde, refugo)…" value="${esc(q)}" autocomplete="off"></div>
+    <div class="isrch"><input id="dq" placeholder="Buscar em toda a documentação (ex.: OEE, cdmolde, refugo, parada)…" value="${esc(q)}" autocomplete="off">${canWrite() ? ' <button class="btn sm" data-docimp="1" title="Importar documentação em JSON">Importar JSON</button>' : ''}</div>
+    ${cols.length > 1 ? `<div class="stats"><b style="align-self:center">Documentação:</b> ${['', ...cols].map(c => `<button class="btn sm ${col === c ? 'pri' : ''}" data-dcol="${esc(c)}">${c || 'Todas'}</button>`).join(' ')}</div>` : ''}
     <div class="stats">${['', ...cats].map(c => `<button class="btn sm ${cat === c ? 'pri' : ''}" data-dcat="${esc(c)}">${c || 'Todas'}</button>`).join(' ')}</div>
     <div id="dlist">${rows.length ? rows.map(d => docCard(d, q, S.docOpen === d.id)).join('') : `<div class="empty"><b>${D.length ? 'Nada encontrado' : 'Nenhum documento carregado'}</b></div>`}</div></div>`;
 }
 function docsInPanel(q) {
   const D = S.docs || []; if (!q || q.length < 2 || !D.length) return '';
   const hits = D.filter(d => d.tipo !== 'geral' && docMatch(d, q).hit); if (!hits.length) return '';
-  return `<h3 style="margin:18px 0 8px">Documentação Views Injet <span class="mut" style="font-weight:400;font-size:13px">· ${hits.length} resultado(s)</span></h3>${hits.slice(0, 8).map(d => docCard(d, q, false)).join('')}${hits.length > 8 ? `<button class="btn sm" data-inc="docs">Ver todos os ${hits.length} na documentação</button>` : ''}`;
+  return `<h3 style="margin:18px 0 8px">Documentação Injet <span class="mut" style="font-weight:400;font-size:13px">· ${hits.length} resultado(s)</span></h3>${hits.slice(0, 8).map(d => docCard(d, q, false)).join('')}${hits.length > 8 ? `<button class="btn sm" data-inc="docs">Ver todos os ${hits.length} na documentação</button>` : ''}`;
 }
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-dopen],[data-dcat]'); if (!t || !S.unlocked) return;
+  const t = e.target.closest('[data-dopen],[data-dcat],[data-dcol],[data-docimp]'); if (!t || !S.unlocked) return;
+  if (t.dataset.docimp !== undefined) return importDocsFile();
+  if (t.dataset.dcol !== undefined) { S.docCol = t.dataset.dcol; S.docCat = ''; render(); return; }
   if (t.dataset.dcat !== undefined) { S.docCat = t.dataset.dcat; render(); return; }
   const id = t.dataset.dopen;
   if (S.incView !== 'docs') { S.incView = 'docs'; S.docQ = S.incQ || ''; S.docOpen = id; render(); return; }
   S.docOpen = S.docOpen === id ? '-' + id : id; render();
 });
 document.addEventListener('input', e => { if (e.target.id === 'dq') { S.docQ = e.target.value; S.docOpen = null; const p = e.target.selectionStart; render(); const n = $('#dq'); n.focus(); n.setSelectionRange(p, p); } });
+
+async function importDocsFile() {
+  if (!canWrite()) return;
+  const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,application/json';
+  fi.onchange = async () => { try { const d = JSON.parse(await fi.files[0].text()); if (!d.docs?.length) return toast('Arquivo inválido'); if (!confirm('Importar ' + d.docs.length + ' documento(s)? IDs iguais serão substituídos.')) return; await importDocsList(d); } catch (e) { toast('Falha ao importar: ' + errMsg(e)); } };
+  fi.click();
+}
 
 if (VIEW) bootViewer(VIEW[1], VIEW[2]); else if (SERVER) bootServer(); else if (AUTO) autoUnlock(); else renderLock('');
 </script>
