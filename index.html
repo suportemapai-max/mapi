@@ -1236,7 +1236,7 @@ async function loadInc(force) {
   S.incErr = '';
   try {
     const rows = await SB.rpc('listar_incidentes'), out = [];
-    for (const r of rows) { try { out.push({...(await openRec(S.key, r.blob, r.id)), id:r.id, criado:r.criado_em, atualizado:r.atualizado_em}); } catch { out.push({id:r.id, descricao:'(não foi possível descriptografar)', severidade:SEV[3][2], categoria:'?', subcategoria:'?', criado:r.criado_em}); } }
+    for (const r of rows) { try { const o = await openRec(S.key, r.blob, r.id); out.push({...o, id:r.id, criado:o.criado_orig || r.criado_em, atualizado:r.atualizado_em}); } catch { out.push({id:r.id, descricao:'(não foi possível descriptografar)', severidade:SEV[3][2], categoria:'?', subcategoria:'?', criado:r.criado_em}); } }
     S.inc = out; S.incLoaded = true;
   } catch (e) { S.incErr = errMsg(e); S.inc = []; }
   render();
@@ -1258,7 +1258,7 @@ function incMain() {
     ${S.incErr ? `<p class="err">${esc(S.incErr)}</p>` : ''}
     <div class="sevs">${SEV.map(([k, n, full, sla]) => `<button class="sev ${f === k ? 'on' : ''}" data-sevf="${k}" style="border-left-color:${SEVC[k]}"><b>${n}</b><span>SLA ${sla}</span><i>${cnt(k)}</i></button>`).join('')}</div>
     <div class="stats"><div><b>${L.length}</b><span>Total de registros</span></div><div><b>${cnt('critical')}</b><span>Críticos</span></div><div><b>${cnt('high')}</b><span>Severos</span></div></div>
-    ${S.incView === 'novo' && canWrite() ? '' : `<div class="isrch"><input id="iq" placeholder="Buscar por ID, categoria ou descrição…" value="${esc(S.incQ || '')}" autocomplete="off"> ${f ? `<button class="btn sm" data-sevf="">Limpar filtro</button>` : ''}</div>
+    ${S.incView === 'novo' && canWrite() ? '' : `<div class="isrch"><input id="iq" placeholder="Buscar por ID, categoria ou descrição…" value="${esc(S.incQ || '')}" autocomplete="off"> ${f ? `<button class="btn sm" data-sevf="">Limpar filtro</button>` : ''}${isAdmin() ? ' <button class="btn sm" data-iimp="1">Importar JSON</button>' : ''}</div>
     <div id="ilist">${rows.length ? rows.map(incCard).join('') : `<div class="empty"><b>${L.length ? 'Nenhum registro encontrado' : 'Nenhum incidente cadastrado'}</b><p>${canWrite() && !L.length ? 'Use “Novo incidente” no menu lateral.' : ''}</p></div>`}</div>`}
   </div>`;
 }
@@ -1303,7 +1303,8 @@ async function incForm(id) {
   d.showModal();
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-inc],[data-sevf],[data-iopen],[data-iedit],[data-idel]'); if (!t || !S.unlocked) return;
+  const t = e.target.closest('[data-inc],[data-sevf],[data-iopen],[data-iedit],[data-idel],[data-iimp]'); if (!t || !S.unlocked) return;
+  if (t.dataset.iimp) return importInc();
   if (t.dataset.inc) { if (t.dataset.inc === 'novo') { goInc('painel'); incForm(null); } else goInc('painel'); }
   else if (t.dataset.sevf !== undefined) { S.incSev = S.incSev === t.dataset.sevf ? '' : t.dataset.sevf; render(); }
   else if (t.dataset.iopen) { S.incOpen = S.incOpen === t.dataset.iopen ? null : t.dataset.iopen; render(); }
@@ -1313,6 +1314,22 @@ document.addEventListener('click', async e => {
   }
 });
 document.addEventListener('input', e => { if (e.target.id === 'iq') { S.incQ = e.target.value; const p = e.target.selectionStart; render(); const n = $('#iq'); n.focus(); n.setSelectionRange(p, p); } });
+
+async function importInc() {
+  if (!canWrite()) return;
+  const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,application/json';
+  fi.onchange = async () => {
+    try {
+      const d = JSON.parse(await fi.files[0].text()); const L = d.registros || [];
+      if (d.tipo !== 'catalogo-incidentes' || !L.length) return toast('Arquivo inválido');
+      if (!confirm('Importar ' + L.length + ' incidente(s)? IDs já existentes serão substituídos.')) return;
+      let n = 0;
+      for (const r of L) { const {id, ...o} = r; if (!/^MAPI\d{4,}$/.test(id)) continue; o.criado_orig = o.criado; delete o.criado; await SB.rpc('salvar_incidente', {p_id:id, p_blob:await sealRec(S.key, o, id)}); n++; }
+      toast(n + ' incidente(s) importado(s)'); await loadInc(true);
+    } catch (e) { toast('Falha ao importar: ' + errMsg(e)); }
+  };
+  fi.click();
+}
 
 if (VIEW) bootViewer(VIEW[1], VIEW[2]); else if (SERVER) bootServer(); else if (AUTO) autoUnlock(); else renderLock('');
 </script>

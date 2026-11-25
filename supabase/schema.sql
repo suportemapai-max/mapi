@@ -452,7 +452,7 @@ end $$;
 
 create or replace function public.salvar_incidente(p_id text, p_blob jsonb) returns void
 language plpgsql security definer set search_path = public as $$
-declare p public.perfis; novo boolean;
+declare p public.perfis; novo boolean; n bigint;
 begin
   p := public._perfil_ativo();
   if p.papel not in ('admin', 'suporte') then raise exception 'sem_permissao' using errcode = '42501'; end if;
@@ -460,6 +460,8 @@ begin
   novo := not exists (select 1 from public.incidentes where id = p_id);
   insert into public.incidentes (id, blob, criado_por, atualizado_por) values (p_id, p_blob, p.id, p.id)
   on conflict (id) do update set blob = excluded.blob, atualizado_por = p.id, atualizado_em = now();
+  n := substr(p_id, 5)::bigint;
+  if n >= (select case when is_called then last_value else last_value - 1 end from public.incidentes_seq) then perform setval('public.incidentes_seq', n); end if;
   perform public._log(p.id, p.email, case when novo then 'incidente_criado' else 'incidente_editado' end, p_id, null, null, null);
 end $$;
 
