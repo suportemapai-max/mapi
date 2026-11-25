@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>NEXUS · MAP Intelligence</title>
+<title>NEXUS | MAP.i</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%238DC63F'/%3E%3Ctext x='32' y='43' font-family='Arial' font-weight='800' font-size='34' fill='%23fff' text-anchor='middle'%3Ei%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#f3f4f7;--panel:#fff;--panel2:#f7f8fa;--line:#e4e7ec;--tx:#141922;--mut:#667085;--hov:#eef1f6;
@@ -199,6 +202,57 @@ dialog.wide{width:min(1100px,96vw)}
 .vnote{color:var(--mut);font-size:12.5px;text-align:center}
 .chk label{display:flex;gap:8px;align-items:center;color:var(--tx);font-size:13px}.chk input,.ugrid input,.uh input{width:auto}
 .ugrid label{display:flex;gap:6px;align-items:center}
+
+/* ====== Identidade MAP.i Nexus ====== */
+:root{
+  --blue-dark:#073f9c;--blue:#075fe4;--cyan:#00aef0;--verde:#79b82a;--teal:#0e7490;
+  --bg-gradient:linear-gradient(160deg,#0a3d8f 0%,#0e7490 100%);
+  --bg:#e8f1fc;--panel:#fff;--panel2:#f3f8ff;--line:#cfdff3;--tx:#0a2a52;--mut:#5b7396;--hov:#e6f0fd;
+  --acc:#075fe4;--acc-bg:#d9e9ff;--ok:#07883f;--ok-bg:#c9f7d9;--warn:#b85c00;--warn-bg:#ffe2a8;--bad:#d51e2b;--bad-bg:#ffd9dc;
+  --sh:0 1px 4px rgba(10,42,82,.08),0 8px 24px rgba(10,61,143,.08);
+  --font-body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;--font-display:'Sora','Inter',sans-serif;
+}
+:root[data-theme=dark]{--bg:#0b1624;--panel:#12223a;--panel2:#0f1c31;--line:#243c5f;--tx:#e6eefb;--mut:#8aa3c7;--hov:#183052;--acc:#6aa6ff;--acc-bg:#16345e;--sh:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b1624;--panel:#12223a;--panel2:#0f1c31;--line:#243c5f;--tx:#e6eefb;--mut:#8aa3c7;--hov:#183052;--acc:#6aa6ff;--acc-bg:#16345e;--sh:none}}
+body{font-family:var(--font-body)}
+h1,h2,h3,.brand span,.dh h2{font-family:var(--font-display)}
+/* login / telas de entrada */
+.lock{position:fixed;inset:0;background:var(--bg-gradient);display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:100;padding:24px;overflow:auto}
+.lockbox{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0;max-width:340px;width:100%;padding:0;color:#fff;text-align:center}
+.lockbox p{color:#eaf6ff}.lockbox h1{color:#fff;font-size:18px;margin:6px 0 4px}
+.lockbox .ic{display:none}
+.lockbox input{background:rgba(255,255,255,.88);border:0;color:#0a2a52;padding:11px 14px;border-radius:8px}
+.lockbox input:focus{outline:0;box-shadow:0 0 0 3px rgba(255,255,255,.4)}
+.lockbox .btn{background:#fff;border-color:#fff;color:var(--blue-dark);font-weight:700;border-radius:8px}
+.lockbox .btn:hover{background:#eaf6ff}.lockbox .btn.pri{background:#fff;color:var(--blue-dark)}
+.lockbox .err{color:#ffe1e1}
+.alt,.alt2{color:#eaf6ff}.alt2{color:#bcd6f7}
+.nx-logo{font-family:var(--font-display);font-size:64px;font-weight:800;color:#fff;letter-spacing:1px;display:flex;align-items:flex-start;justify-content:center;line-height:1}
+.logo-balao{position:relative;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;margin-top:2px;margin-left:-4px;background:var(--verde);border-radius:50%;animation:logoBalaoCair 1.05s cubic-bezier(.34,1.56,.64,1) .25s both}
+.logo-balao span{display:inline-block;font-size:16px;font-weight:800;color:#fff;font-family:inherit}
+@keyframes logoBalaoCair{0%{transform:translateY(-260px) scale(.85);opacity:0}55%{transform:translateY(0) scale(1);opacity:1}70%{transform:translateY(-12px)}83%{transform:translateY(0)}92%{transform:translateY(-5px)}100%{transform:translateY(0)}}
+.nx-produto{color:#fff;font-size:18px;font-weight:700;letter-spacing:6px;margin-top:2px}
+.nx-tag{color:#eaf6ff;font-size:14px;margin:4px 0 30px;letter-spacing:2px}
+.lockbox form,form.lockbox{display:flex;flex-direction:column;gap:2px}
+/* shell: barra lateral azul */
+header{background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--sh)}
+.brand .nx-mini{display:flex;align-items:flex-start;font-family:var(--font-display);font-weight:800;font-size:22px;color:var(--blue-dark);line-height:1;letter-spacing:.5px}
+.brand .nx-mini .logo-balao{width:11px;height:11px;margin-top:1px;margin-left:-1px;animation:none}.brand .nx-mini .logo-balao span{font-size:7px}
+.brand .nx-name{font-size:12px;letter-spacing:4px;color:var(--blue);font-weight:800;margin-left:6px}
+nav{background:var(--bg-gradient);border-right:0;color:#fff}
+nav h6{color:rgba(255,255,255,.7)}
+nav button{color:#fff;opacity:.82;position:relative}
+nav button svg,nav button .n{color:rgba(255,255,255,.85)}
+nav button:hover{background:rgba(255,255,255,.15);opacity:1}
+nav button.on{background:rgba(255,255,255,.25);color:#fff;opacity:1;box-shadow:inset 0 0 0 1px rgba(255,255,255,.38)}
+nav button.on svg,nav button.on .n{color:#fff}
+nav button.on::before{content:'';position:absolute;left:-6px;top:9px;width:4px;height:20px;border-radius:4px;background:var(--verde);box-shadow:0 0 10px rgba(121,184,42,.65)}
+nav .badge{background:#e0652f;color:#fff}
+.btn.pri,.qbtn.p{background:var(--blue);border-color:var(--blue)}
+.search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(141,198,63,.35)}
+.item.on{box-shadow:var(--sh),inset 3px 0 0 var(--verde),inset 0 0 0 1px var(--line)}
+.vtimer{background:var(--warn-bg)}
+.who{color:var(--mut)}
 </style>
 </head>
 <body>
@@ -299,8 +353,8 @@ function lock(msg) {
   renderLock(msg || '');
 }
 function renderLock(msg) {
-  $('#app').innerHTML = `<div class="lock"><form class="lockbox" id="lf" autocomplete="off">
-    <div class="ic">${I('lock', 26)}</div><h1>NEXUS</h1><p>MAP Intelligence · dados criptografados neste arquivo</p>
+  $('#app').innerHTML = `<div class="lock">${NXLOGO}<form class="lockbox" id="lf" autocomplete="off">
+    <h1>Cofre de acessos</h1><p>Dados criptografados neste arquivo</p>
     <input type="password" id="pw" placeholder="Senha mestra" autofocus autocomplete="current-password">
     <p class="err" id="er">${esc(msg)}</p><button class="btn pri" id="go">Desbloquear</button></form></div>`;
   $('#lf').onsubmit = async e => {
@@ -388,7 +442,7 @@ function render() {
   const prevQ = document.activeElement?.id === 'q' ? [$('#q').selectionStart] : null;
   $('#app').innerHTML = `<div class="shell">
   <header>
-    <div class="brand"><i>${I('key', 17)}</i><span>NEXUS</span></div>
+    <div class="brand"><div class="nx-mini">map<span class="logo-balao"><span>i</span></span></div><span class="nx-name">NEXUS</span></div>
     <div class="search">${I('search', 16, 'class="si"')}<input id="q" placeholder="Buscar cliente, IP, usuário, AnyDesk…" value="${esc(S.q)}" autocomplete="off" spellcheck="false">
       ${S.q ? `<button class="ib clr" data-a="clr" title="Limpar (Esc)">${I('x', 14)}</button>` : ''}<kbd>/</kbd></div>
     <span class="sp"></span>
@@ -789,11 +843,12 @@ function logReveal(key) {
 }
 
 /* ---------- telas de entrada ---------- */
-const shell = inner => `<div class="lock"><div class="lockbox">${inner}</div></div>`;
+const NXLOGO = '<div class="nx-logo">map<span class="logo-balao"><span>i</span></span></div><div class="nx-produto">NEXUS</div><div class="nx-tag">INDUSTRIAIS INTELIGENTES</div>';
+const shell = inner => `<div class="lock">${NXLOGO}<div class="lockbox">${inner}</div></div>`;
 let authMode = 'login';
 function renderAuth(msg, ok) {
   const m = authMode, t = {login:'Entrar', signup:'Criar conta', recover:'Recuperar senha'}[m];
-  $('#app').innerHTML = shell(`<form id="af" autocomplete="on"><div class="ic">${I('lock', 26)}</div><h1>NEXUS</h1><p>MAP Intelligence · ${t.toLowerCase()}</p>
+  $('#app').innerHTML = shell(`<form id="af" autocomplete="on"><h1>${t}</h1><p>MAP Intelligence</p>
     ${m === 'signup' ? '<input id="an" placeholder="Seu nome" autocomplete="name">' : ''}
     <input type="email" id="ae" placeholder="E-mail" autocomplete="username" required autofocus>
     ${m !== 'recover' ? `<input type="password" id="ap" placeholder="Senha${m === 'signup' ? ' (mínimo 12 caracteres)' : ''}" autocomplete="${m === 'login' ? 'current-password' : 'new-password'}" required>` : ''}
@@ -815,13 +870,13 @@ function renderAuth(msg, ok) {
   };
 }
 function renderMsg(title, text, extra = '') {
-  $('#app').innerHTML = shell(`<div class="ic">${I('clock', 26)}</div><h1>${esc(title)}</h1><p>${esc(text)}</p>${extra}
+  $('#app').innerHTML = shell(`<h1>${esc(title)}</h1><p>${esc(text)}</p>${extra}
     <button class="btn" id="so">Sair</button>`);
   $('#so').onclick = () => srvLogout();
 }
 function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(KS); S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
 function renderKeyPrompt(msg) {
-  $('#app').innerHTML = shell(`<form id="kf" autocomplete="off"><div class="ic">${I('key', 26)}</div><h1>Chave do cofre</h1><p>${esc(S.me.email)} · ${esc(S.me.papel)}<br>Os dados são criptografados no seu navegador com esta chave.</p>
+  $('#app').innerHTML = shell(`<form id="kf" autocomplete="off"><h1>Chave do cofre</h1><p>${esc(S.me.email)} · ${esc(S.me.papel)}<br>Os dados são criptografados no seu navegador com esta chave.</p>
     <input type="password" id="kp" placeholder="Chave do cofre" autofocus autocomplete="off"><p class="err" id="er">${esc(msg || '')}</p>
     <button class="btn pri" id="go">Abrir cofre</button><div class="alts"><button type="button" class="alt" id="so2">Sair da conta</button></div></form>`);
   $('#so2').onclick = srvLogout;
@@ -831,7 +886,7 @@ function renderKeyPrompt(msg) {
   };
 }
 function renderSetup() {
-  $('#app').innerHTML = shell(`<form id="sf" autocomplete="off"><div class="ic">${I('shield', 26)}</div><h1>Configurar o cofre</h1>
+  $('#app').innerHTML = shell(`<form id="sf" autocomplete="off"><h1>Configurar o cofre</h1>
     <p>Você é o administrador. Defina a <b>chave do cofre</b>: ela criptografa tudo e será pedida a cada pessoa da equipe. Se for perdida, os dados não podem ser recuperados.</p>
     <input type="password" id="k1" placeholder="Chave do cofre (mínimo 12 caracteres)" autocomplete="new-password"><input type="password" id="k2" placeholder="Repita a chave" autocomplete="new-password">
     <p class="err" id="er"></p><button class="btn pri" id="go">Criar cofre</button><div class="alts"><button type="button" class="alt" id="so2">Sair da conta</button></div></form>`);
@@ -1037,9 +1092,9 @@ function exportClean() {
 /* ---------- visualização por link (sem login) ---------- */
 async function bootViewer(id, k) {
   document.title = 'Acesso compartilhado';
-  const end = (msg, ic = 'lock') => { clearInterval(window._vt); clearInterval(window._vp); $('#app').innerHTML = shell(`<div class="ic">${I(ic, 26)}</div><h1>Acesso encerrado</h1><p>${esc(msg)}</p>`); };
+  const end = (msg, ic = 'lock') => { clearInterval(window._vt); clearInterval(window._vp); $('#app').innerHTML = shell(`<h1>Acesso encerrado</h1><p>${esc(msg)}</p>`); };
   if (!SERVER) return end('Este aplicativo ainda não está conectado ao servidor.');
-  $('#app').innerHTML = shell('<div class="ic">' + I('lock', 26) + '</div><h1>Abrindo acesso…</h1>');
+  $('#app').innerHTML = shell('<h1>Abrindo acesso…</h1>');
   let res, data;
   try { res = await SB.anon('abrir_link', {p_id:id}); } catch { return end('Este link expirou, foi cancelado ou atingiu o limite de aberturas.'); }
   try { const key = await crypto.subtle.importKey('raw', b64ud(k), 'AES-GCM', false, ['decrypt']); data = await openRec(key, res.blob); }
