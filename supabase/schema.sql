@@ -27,8 +27,7 @@ create table if not exists public.perfis (
 
 create table if not exists public.cofre_config (
   id          int primary key default 1 check (id = 1),
-  salt        text not null,
-  verificador jsonb not null,
+  chave       text not null,   -- chave AES-256 (base64). Só sai pela função obter_chave_cofre(), com Authenticator (aal2)
   criado_em   timestamptz not null default now()
 );
 
@@ -110,12 +109,22 @@ create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.tg_novo_usuario();
 
 -- ---------- auxiliares (não expostas) ----------
-create or replace function public._perfil_ativo() returns public.perfis
+create or replace function public._perfil_basico() returns public.perfis
 language plpgsql stable security definer set search_path = public as $$
 declare v public.perfis;
 begin
   select * into v from public.perfis where id = auth.uid() and ativo;
   if v.id is null then raise exception 'sem_acesso' using errcode = '42501'; end if;
+  return v;
+end $$;
+
+-- Exige sessão com Authenticator confirmado (aal2) para tudo que toca dados.
+create or replace function public._perfil_ativo() returns public.perfis
+language plpgsql stable security definer set search_path = public as $$
+declare v public.perfis;
+begin
+  v := public._perfil_basico();
+  if coalesce(auth.jwt() ->> 'aal', '') <> 'aal2' then raise exception 'mfa_requerido' using errcode = '42501'; end if;
   return v;
 end $$;
 
@@ -134,7 +143,7 @@ begin
           (select titulo from public.registros where id = p_reg), left(p_campo, 200), left(p_detalhe, 500), p_link);
 end $$;
 
-revoke all on function public._perfil_ativo(), public._pode_ver(public.perfis, text),
+revoke all on function public._perfil_basico(), public._perfil_ativo(), public._pode_ver(public.perfis, text),
   public._log(uuid, text, text, text, text, text, uuid), public.tg_novo_usuario() from public, anon, authenticated;
 
 -- ---------- sessão / configuração ----------
@@ -143,25 +152,34 @@ language sql stable security definer set search_path = public as $$
   select to_jsonb(p) - 'criado_em' from public.perfis p where p.id = auth.uid()
 $$;
 
-create or replace function public.config_cofre() returns jsonb
+create or replace function public.cofre_configurado() returns boolean
 language plpgsql stable security definer set search_path = public as $$
-declare c public.cofre_config;
 begin
-  perform public._perfil_ativo();
-  select * into c from public.cofre_config where id = 1;
-  if c.id is null then return null; end if;
-  return jsonb_build_object('salt', c.salt, 'verificador', c.verificador);
+  perform public._perfil_basico();
+  return exists (select 1 from public.cofre_config);
 end $$;
 
-create or replace function public.configurar_cofre(p_salt text, p_verificador jsonb) returns void
+create or replace function public.configurar_cofre(p_chave text) returns void
 language plpgsql security definer set search_path = public as $$
 declare p public.perfis;
 begin
   p := public._perfil_ativo();
   if p.papel <> 'admin' then raise exception 'somente_admin' using errcode = '42501'; end if;
   if exists (select 1 from public.cofre_config) then raise exception 'ja_configurado'; end if;
-  insert into public.cofre_config (id, salt, verificador) values (1, p_salt, p_verificador);
+  if length(p_chave) < 40 then raise exception 'chave_invalida'; end if;
+  insert into public.cofre_config (id, chave) values (1, p_chave);
   perform public._log(p.id, p.email, 'cofre_configurado', null, null, null, null);
+end $$;
+
+create or replace function public.obter_chave_cofre() returns text
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis; k text;
+begin
+  p := public._perfil_ativo();
+  select chave into k from public.cofre_config where id = 1;
+  if k is null then raise exception 'cofre_nao_configurado'; end if;
+  perform public._log(p.id, p.email, 'cofre_aberto', null, null, null, null);
+  return k;
 end $$;
 
 -- ---------- registros ----------
@@ -375,7 +393,7 @@ end $$;
 
 -- ---------- permissões de execução ----------
 revoke all on function
-  public.meu_perfil(), public.config_cofre(), public.configurar_cofre(text, jsonb),
+  public.meu_perfil(), public.cofre_configurado(), public.configurar_cofre(text), public.obter_chave_cofre(),
   public.carregar_registros(), public.salvar_registro(text, text, text, jsonb),
   public.importar_registros(jsonb), public.excluir_registro(text),
   public.registrar_evento(text, text, text, text), public.listar_logs(int, text, text),
@@ -386,7 +404,7 @@ revoke all on function
 from public, anon, authenticated;
 
 grant execute on function
-  public.meu_perfil(), public.config_cofre(), public.configurar_cofre(text, jsonb),
+  public.meu_perfil(), public.cofre_configurado(), public.configurar_cofre(text), public.obter_chave_cofre(),
   public.carregar_registros(), public.salvar_registro(text, text, text, jsonb),
   public.importar_registros(jsonb), public.excluir_registro(text),
   public.registrar_evento(text, text, text, text), public.listar_logs(int, text, text),

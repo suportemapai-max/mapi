@@ -253,6 +253,8 @@ nav .badge{background:#e0652f;color:#fff}
 .item.on{box-shadow:var(--sh),inset 3px 0 0 var(--verde),inset 0 0 0 1px var(--line)}
 .vtimer{background:var(--warn-bg)}
 .who{color:var(--mut)}
+.qr{background:#fff;border-radius:12px;padding:10px;display:inline-block;margin:6px 0 10px}.qr img{width:180px;height:180px;display:block}
+details.sec{color:#eaf6ff;margin:4px 0 10px;font-size:13px}details.sec code{display:block;background:rgba(255,255,255,.15);padding:8px;border-radius:8px;word-break:break-all;margin-top:6px;user-select:all}
 </style>
 </head>
 <body>
@@ -761,7 +763,7 @@ function openEditor(id) {
 /* =====================================================================
    MODO SERVIDOR (Supabase): login por e-mail, permissões, logs, links
    ===================================================================== */
-const CFG_LS = 'cofre_map_cfg', SESS_LS = 'cofre_map_sess', KS = 'cofre_map_ks';
+const CFG_LS = 'cofre_map_cfg', SESS_LS = 'cofre_map_sess', LOCKED = 'cofre_map_locked';
 const cfg = (() => { try { const c = JSON.parse(localStorage.getItem(CFG_LS)); if (c && c.url && c.key) return c; } catch {} return CFG0; })();
 const SERVER = !!(cfg.url && cfg.key);
 const VIEW = location.hash.match(/^#\/v\/([0-9a-f-]{36})\.([A-Za-z0-9_-]{20,})$/i);
@@ -774,14 +776,15 @@ const ERR = {
   link_invalido:'Link inválido, expirado ou cancelado.', nao_pode_rebaixar_a_si_mesmo:'Você não pode retirar seu próprio acesso de administrador.',
   expiracao_invalida:'Validade inválida (máximo de 30 dias).', ja_configurado:'O cofre já foi configurado.',
   'Invalid login credentials':'E-mail ou senha incorretos.', 'Email not confirmed':'Confirme seu e-mail antes de entrar (veja a caixa de entrada).',
-  'User already registered':'Este e-mail já possui cadastro.', link_inexistente:'Link não encontrado.'
+  'User already registered':'Este e-mail já possui cadastro.', link_inexistente:'Link não encontrado.',
+  mfa_requerido:'Confirme o código do Authenticator.', 'Invalid TOTP code entered':'Código incorreto ou expirado.', cofre_nao_configurado:'O cofre ainda não foi configurado.'
 };
 const errMsg = e => e instanceof TypeError ? 'Sem conexão com o servidor.' : (ERR[e?.message] || e?.message || 'Erro inesperado.');
 
 const SB = {
   sess:null,
-  load() { try { this.sess = JSON.parse(localStorage.getItem(SESS_LS)); } catch { this.sess = null; } },
-  save(s) { this.sess = s; try { s ? localStorage.setItem(SESS_LS, JSON.stringify(s)) : localStorage.removeItem(SESS_LS); } catch {} },
+  load() { try { this.sess = JSON.parse(sessionStorage.getItem(SESS_LS)); } catch { this.sess = null; } },
+  save(s) { this.sess = s; try { s ? sessionStorage.setItem(SESS_LS, JSON.stringify(s)) : sessionStorage.removeItem(SESS_LS); } catch {} },
   async raw(path, o = {}) {
     const h = {apikey:cfg.key, 'Content-Type':'application/json', Authorization:'Bearer ' + (o.token || cfg.key)};
     const r = await fetch(cfg.url.replace(/\/+$/, '') + path, {method:o.method || 'POST', headers:h, body:o.body === undefined ? undefined : JSON.stringify(o.body)});
@@ -805,7 +808,19 @@ const SB = {
     const j = await this.raw('/auth/v1/signup', {body:{email, password, data:{nome}}});
     if (j?.access_token) { this.save(this.fromAuth(j, email)); return true; } return false;
   },
-  recover(email) { return this.raw('/auth/v1/recover', {body:{email}}); }
+  recover(email) { return this.raw('/auth/v1/recover', {body:{email}}); },
+  async user() { return this.raw('/auth/v1/user', {method:'GET', token:await this.token()}); },
+  aal() { try { return JSON.parse(TD.decode(b64ud(this.sess.access_token.split('.')[1]))).aal || null; } catch { return null; } },
+  async enroll() {
+    const u = await this.user();
+    for (const f of (u.factors || [])) if (f.status !== 'verified') await this.raw('/auth/v1/factors/' + f.id, {method:'DELETE', token:await this.token()}).catch(() => {});
+    return this.raw('/auth/v1/factors', {body:{factor_type:'totp', friendly_name:'NEXUS ' + Date.now(), issuer:'NEXUS MAP.i'}, token:await this.token()});
+  },
+  async verify(factorId, code) {
+    const t = await this.token(), c = await this.raw(`/auth/v1/factors/${factorId}/challenge`, {body:{}, token:t});
+    const j = await this.raw(`/auth/v1/factors/${factorId}/verify`, {body:{challenge_id:c.id, code:String(code).replace(/\D/g, '')}, token:t});
+    this.save(this.fromAuth(j, this.sess.email));
+  }
 };
 
 /* ---------- criptografia dos registros (AES-GCM; id do registro vira dado autenticado) ---------- */
@@ -819,10 +834,10 @@ async function openRec(key, blob, aad) {
 }
 
 /* ---------- estado do servidor ---------- */
-S.me = null; S.srvcfg = null;
+S.me = null;
 const canWrite = () => !SERVER || ['admin', 'suporte'].includes(S.me?.papel);
 const isAdmin = () => SERVER && S.me?.papel === 'admin';
-const EV = {login:'Entrou', logout:'Saiu', abrir:'Abriu registro', revelar:'Revelou valor', copiar:'Copiou', exportar:'Exportou', bloqueio:'Bloqueio por inatividade',
+const EV = {cofre_aberto:'Abriu o cofre (chave liberada)', login:'Entrou', logout:'Saiu', abrir:'Abriu registro', revelar:'Revelou valor', copiar:'Copiou', exportar:'Exportou', bloqueio:'Bloqueio por inatividade',
   carregar:'Carregou cofre', criar:'Criou registro', editar:'Editou registro', excluir:'Excluiu registro', importar:'Importou dados', permissao:'Alterou permissão',
   cofre_configurado:'Configurou o cofre', link_criado:'Criou link', link_revogado:'Cancelou link', link_aberto:'Link aberto', link_copiou:'Copiou (via link)'};
 
@@ -874,53 +889,66 @@ function renderMsg(title, text, extra = '') {
     <button class="btn" id="so">Sair</button>`);
   $('#so').onclick = () => srvLogout();
 }
-function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(KS); S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
-function renderKeyPrompt(msg) {
-  $('#app').innerHTML = shell(`<form id="kf" autocomplete="off"><h1>Chave do cofre</h1><p>${esc(S.me.email)} · ${esc(S.me.papel)}<br>Os dados são criptografados no seu navegador com esta chave.</p>
-    <input type="password" id="kp" placeholder="Chave do cofre" autofocus autocomplete="off"><p class="err" id="er">${esc(msg || '')}</p>
-    <button class="btn pri" id="go">Abrir cofre</button><div class="alts"><button type="button" class="alt" id="so2">Sair da conta</button></div></form>`);
+function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(LOCKED); S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
+function renderTotp(factorId, msg) {
+  $('#app').innerHTML = shell(`<form id="mf" autocomplete="off"><h1>Código do Authenticator</h1><p>${esc(S.me?.email || SB.sess?.email || '')}<br>Digite o código de 6 dígitos do Google Authenticator.</p>
+    <input id="mc" inputmode="numeric" maxlength="7" placeholder="000000" autocomplete="one-time-code" autofocus style="text-align:center;letter-spacing:6px;font-size:20px">
+    <p class="err" id="er">${esc(msg || '')}</p><button class="btn pri" id="go">Entrar</button>
+    <div class="alts"><button type="button" class="alt" id="so2">Sair da conta</button></div></form>`);
   $('#so2').onclick = srvLogout;
-  $('#kf').onsubmit = async e => {
-    e.preventDefault(); const btn = $('#go'); btn.disabled = true; btn.textContent = 'Abrindo…';
-    try { await unlockWith($('#kp').value); } catch (err) { btn.disabled = false; btn.textContent = 'Abrir cofre'; $('#er').textContent = err.message === 'chave' ? 'Chave incorreta.' : errMsg(err); $('#kp').select(); }
+  $('#mf').onsubmit = async e => {
+    e.preventDefault(); const btn = $('#go'); btn.disabled = true;
+    try { await SB.verify(factorId, $('#mc').value); sessionStorage.removeItem(LOCKED); await bootServer(true); }
+    catch (err) { btn.disabled = false; $('#er').textContent = errMsg(err); $('#mc').select(); $('#mf').classList.remove('shake'); void $('#mf').offsetWidth; $('#mf').classList.add('shake'); }
+  };
+}
+async function renderEnroll(msg) {
+  $('#app').innerHTML = shell('<h1>Autenticador</h1><p>Preparando…</p>');
+  let f; try { f = await SB.enroll(); } catch (e) { return renderMsg('Erro', errMsg(e)); }
+  $('#app').innerHTML = shell(`<form id="mf" autocomplete="off"><h1>Ativar o Google Authenticator</h1>
+    <p>1. No app, toque em <b>+</b> e escolha “Ler código QR”.<br>2. Digite o código de 6 dígitos que aparecer.</p>
+    <div class="qr"><img alt="QR Code do Authenticator" src="${esc(f.totp.qr_code)}"></div>
+    <details class="sec"><summary>Não consegue ler? Use a chave manual</summary><code id="tsec">${esc(f.totp.secret)}</code></details>
+    <input id="mc" inputmode="numeric" maxlength="7" placeholder="Código de 6 dígitos" autocomplete="one-time-code" style="text-align:center;letter-spacing:4px">
+    <p class="err" id="er">${esc(msg || '')}</p><button class="btn pri" id="go">Ativar e entrar</button>
+    <div class="alts"><button type="button" class="alt" id="so2">Sair da conta</button></div></form>`);
+  $('#so2').onclick = srvLogout;
+  $('#mf').onsubmit = async e => {
+    e.preventDefault(); const btn = $('#go'); btn.disabled = true;
+    try { await SB.verify(f.id, $('#mc').value); sessionStorage.removeItem(LOCKED); await bootServer(true); }
+    catch (err) { btn.disabled = false; $('#er').textContent = errMsg(err); $('#mc').select(); }
   };
 }
 function renderSetup() {
   $('#app').innerHTML = shell(`<form id="sf" autocomplete="off"><h1>Configurar o cofre</h1>
-    <p>Você é o administrador. Defina a <b>chave do cofre</b>: ela criptografa tudo e será pedida a cada pessoa da equipe. Se for perdida, os dados não podem ser recuperados.</p>
-    <input type="password" id="k1" placeholder="Chave do cofre (mínimo 12 caracteres)" autocomplete="new-password"><input type="password" id="k2" placeholder="Repita a chave" autocomplete="new-password">
+    <p>Você é o administrador. O NEXUS vai gerar a chave de criptografia dos dados. Ela só é liberada a quem estiver logado com o código do Authenticator.</p>
     <p class="err" id="er"></p><button class="btn pri" id="go">Criar cofre</button><div class="alts"><button type="button" class="alt" id="so2">Sair da conta</button></div></form>`);
   $('#so2').onclick = srvLogout;
   $('#sf').onsubmit = async e => {
-    e.preventDefault(); const a = $('#k1').value, b = $('#k2').value, er = $('#er');
-    if (a.length < 12) return er.textContent = 'Use pelo menos 12 caracteres.';
-    if (a !== b) return er.textContent = 'As chaves não conferem.';
-    $('#go').disabled = true; $('#go').textContent = 'Criando…';
-    try {
-      const salt = crypto.getRandomValues(new Uint8Array(16)), key = await deriveKey(a, salt, 600000);
-      await SB.rpc('configurar_cofre', {p_salt:b64e(salt), p_verificador:await sealRec(key, 'cofre-map-ok', 'verificador')});
-      await bootServer(true, a);
-    } catch (err) { $('#go').disabled = false; $('#go').textContent = 'Criar cofre'; er.textContent = errMsg(err); }
+    e.preventDefault(); $('#go').disabled = true; $('#go').textContent = 'Criando…';
+    try { await SB.rpc('configurar_cofre', {p_chave:b64e(crypto.getRandomValues(new Uint8Array(32)))}); await bootServer(true); }
+    catch (err) { $('#go').disabled = false; $('#go').textContent = 'Criar cofre'; $('#er').textContent = errMsg(err); }
   };
 }
 
-async function bootServer(fresh, passHint) {
+async function bootServer(fresh) {
   SB.load();
   if (!SB.sess) return renderAuth();
   try { S.me = await SB.rpc('meu_perfil'); } catch (e) { return renderAuth(errMsg(e)); }
   if (!S.me) { SB.save(null); return renderAuth('Perfil não encontrado.'); }
   if (!S.me.ativo) return renderMsg('Aguardando liberação', 'Sua conta foi criada, mas um administrador ainda precisa liberar o acesso. Avise a equipe responsável.');
-  try { S.srvcfg = await SB.rpc('config_cofre'); } catch (e) { return renderMsg('Erro', errMsg(e)); }
-  if (!S.srvcfg) return S.me.papel === 'admin' ? renderSetup() : renderMsg('Cofre ainda não configurado', 'O administrador precisa concluir a configuração inicial.');
+  if (SB.aal() !== 'aal2' || sessionStorage.getItem(LOCKED)) {
+    let u; try { u = await SB.user(); } catch (e) { return renderAuth(errMsg(e)); }
+    const v = (u.factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified');
+    return v ? renderTotp(v.id) : renderEnroll();
+  }
+  let ok; try { ok = await SB.rpc('cofre_configurado'); } catch (e) { return renderMsg('Erro', errMsg(e)); }
+  if (!ok) return S.me.papel === 'admin' ? renderSetup() : renderMsg('Cofre ainda não configurado', 'O administrador precisa concluir a configuração inicial.');
   if (fresh) logEv('login');
-  const ks = passHint || sessionStorage.getItem(KS);
-  if (ks) { try { await unlockWith(ks); return; } catch { sessionStorage.removeItem(KS); } }
-  renderKeyPrompt();
+  try { await openVault(); } catch (e) { renderMsg('Erro', errMsg(e)); }
 }
-async function unlockWith(pass) {
-  const key = await deriveKey(pass, b64d(S.srvcfg.salt), 600000);
-  try { if (await openRec(key, S.srvcfg.verificador, 'verificador') !== 'cofre-map-ok') throw 0; } catch { throw new Error('chave'); }
-  S.key = key; try { sessionStorage.setItem(KS, pass); } catch {}
+async function openVault() {
+  S.key = await crypto.subtle.importKey('raw', b64d(await SB.rpc('obter_chave_cofre')), 'AES-GCM', false, ['encrypt', 'decrypt']);
   await reloadRecs();
   Object.assign(S, {unlocked:true, cat:'Todos', sel:null, dirty:false, _lastOpen:null}); bump(); render();
   if (isAdmin() && !S.recs.length) offerImport();
@@ -933,10 +961,11 @@ async function reloadRecs() {
   }));
   S.ru = null;
 }
-function lockSrv(msg) {
-  logEv('bloqueio');
-  S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null; sessionStorage.removeItem(KS);
-  const d = $('#dlg'); if (d && d.open) d.close(); renderKeyPrompt(msg);
+async function lockSrv(msg) {
+  logEv('bloqueio'); try { sessionStorage.setItem(LOCKED, '1'); } catch {}
+  S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
+  const d = $('#dlg'); if (d && d.open) d.close();
+  try { const v = ((await SB.user()).factors || []).find(x => x.factor_type === 'totp' && x.status === 'verified'); v ? renderTotp(v.id, msg || '') : srvLogout(); } catch { srvLogout(); }
 }
 
 /* ---------- gravação ---------- */
@@ -1142,7 +1171,7 @@ document.addEventListener('click', async e => {
   else if (a === 'alllinks') openAllLinks();
   else if (a === 'cfg') openCfg();
   else if (a === 'cfgsave') saveCfg();
-  else if (a === 'cfgoff') { if (confirm('Voltar ao modo local (arquivo)?')) { localStorage.removeItem(CFG_LS); SB.save(null); sessionStorage.removeItem(KS); location.reload(); } }
+  else if (a === 'cfgoff') { if (confirm('Voltar ao modo local (arquivo)?')) { localStorage.removeItem(CFG_LS); SB.save(null); sessionStorage.removeItem(LOCKED); location.reload(); } }
   else if (a === 'logout') srvLogout();
   else if (a === 'impold') { const data = await legacyData(); if (!data) return toast('Não há dados antigos neste arquivo'); if (confirm(`Importar ${data.length} registros do arquivo para o servidor? Registros com o mesmo ID serão substituídos.`)) importLegacy(data).catch(er => toast(errMsg(er))); }
   else if (a === 'clean') exportClean();
