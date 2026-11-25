@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Cofre de Acessos · MAP Intelligence</title>
+<title>NEXUS · MAP Intelligence</title>
 <style>
 :root{
   --bg:#f3f4f7;--panel:#fff;--panel2:#f7f8fa;--line:#e4e7ec;--tx:#141922;--mut:#667085;--hov:#eef1f6;
@@ -300,7 +300,7 @@ function lock(msg) {
 }
 function renderLock(msg) {
   $('#app').innerHTML = `<div class="lock"><form class="lockbox" id="lf" autocomplete="off">
-    <div class="ic">${I('lock', 26)}</div><h1>Cofre de Acessos</h1><p>MAP Intelligence · dados criptografados neste arquivo</p>
+    <div class="ic">${I('lock', 26)}</div><h1>NEXUS</h1><p>MAP Intelligence · dados criptografados neste arquivo</p>
     <input type="password" id="pw" placeholder="Senha mestra" autofocus autocomplete="current-password">
     <p class="err" id="er">${esc(msg)}</p><button class="btn pri" id="go">Desbloquear</button></form></div>`;
   $('#lf').onsubmit = async e => {
@@ -388,7 +388,7 @@ function render() {
   const prevQ = document.activeElement?.id === 'q' ? [$('#q').selectionStart] : null;
   $('#app').innerHTML = `<div class="shell">
   <header>
-    <div class="brand"><i>${I('key', 17)}</i><span>Cofre de Acessos</span></div>
+    <div class="brand"><i>${I('key', 17)}</i><span>NEXUS</span></div>
     <div class="search">${I('search', 16, 'class="si"')}<input id="q" placeholder="Buscar cliente, IP, usuário, AnyDesk…" value="${esc(S.q)}" autocomplete="off" spellcheck="false">
       ${S.q ? `<button class="ib clr" data-a="clr" title="Limpar (Esc)">${I('x', 14)}</button>` : ''}<kbd>/</kbd></div>
     <span class="sp"></span>
@@ -793,7 +793,7 @@ const shell = inner => `<div class="lock"><div class="lockbox">${inner}</div></d
 let authMode = 'login';
 function renderAuth(msg, ok) {
   const m = authMode, t = {login:'Entrar', signup:'Criar conta', recover:'Recuperar senha'}[m];
-  $('#app').innerHTML = shell(`<form id="af" autocomplete="on"><div class="ic">${I('lock', 26)}</div><h1>Cofre de Acessos</h1><p>MAP Intelligence · ${t.toLowerCase()}</p>
+  $('#app').innerHTML = shell(`<form id="af" autocomplete="on"><div class="ic">${I('lock', 26)}</div><h1>NEXUS</h1><p>MAP Intelligence · ${t.toLowerCase()}</p>
     ${m === 'signup' ? '<input id="an" placeholder="Seu nome" autocomplete="name">' : ''}
     <input type="email" id="ae" placeholder="E-mail" autocomplete="username" required autofocus>
     ${m !== 'recover' ? `<input type="password" id="ap" placeholder="Senha${m === 'signup' ? ' (mínimo 12 caracteres)' : ''}" autocomplete="${m === 'login' ? 'current-password' : 'new-password'}" required>` : ''}
