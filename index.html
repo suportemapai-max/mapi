@@ -265,10 +265,13 @@ nav h6.grp{margin:14px 10px 4px;font-size:12px;color:#fff;opacity:.9;border-top:
 .ib2{padding:4px 14px 14px;display:grid;gap:10px}.rich{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:4px;overflow:auto}.rich img,.rte img{max-width:100%;height:auto;border-radius:6px}.acts{display:flex;gap:8px}
 .rte{border:1px solid var(--line);border-radius:0 0 8px 8px;padding:8px 10px;background:var(--panel);overflow:auto;max-height:260px}.rtb{display:flex;gap:4px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;padding:4px}.rtb button{border:1px solid var(--line);background:var(--panel);color:var(--tx);border-radius:6px;padding:2px 8px;font-size:12px}
 .inc .isrch input{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--tx)}
+table.dtb td,table.dtb th{vertical-align:top;padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}table.dtb{width:100%;border-collapse:collapse;font-size:13px}
 </style>
 </head>
 <body>
 <div id="app"></div>
+<script type="application/json" id="acc-patch">null</script>
+<script type="application/json" id="docs-seed">null</script>
 <script type="application/json" id="inc-seed">null</script>
 <script type="application/json" id="vault-blob">{}</script>
 <script>
@@ -361,7 +364,7 @@ function bump() { clearTimeout(S.idle); if (S.unlocked && !(AUTO && !SERVER)) S.
 ['mousemove','keydown','click','scroll','touchstart'].forEach(e => addEventListener(e, bump, {passive:true}));
 function lock(msg) {
   if (SERVER) return lockSrv(msg);
-  S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
+  S.inc = null; S.incLoaded = false; S.docs = null; S.docsLoaded = false; S.docQ = ''; S.docOpen = null; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
   const d = $('#dlg'); if (d && d.open) d.close();
   renderLock(msg || '');
 }
@@ -900,7 +903,7 @@ function renderMsg(title, text, extra = '') {
     <button class="btn" id="so">Sair</button>`);
   $('#so').onclick = () => srvLogout();
 }
-function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(LOCKED); S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
+function srvLogout() { logEv('logout'); setTimeout(() => { SB.save(null); sessionStorage.removeItem(LOCKED); S.inc = null; S.incLoaded = false; S.docs = null; S.docsLoaded = false; S.docQ = ''; S.docOpen = null; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.me = null; S.unlocked = false; authMode = 'login'; renderAuth(); }, 150); }
 function renderUnlock(msg) {
   $('#app').innerHTML = shell(`<form id="uf" autocomplete="off"><h1>Sessão bloqueada</h1><p>${esc(S.me?.email || SB.sess?.email || '')}<br>Digite sua senha para continuar. O Authenticator só é pedido no login.</p>
     <input id="up" type="password" placeholder="Senha" autocomplete="current-password" autofocus>
@@ -977,6 +980,9 @@ async function openVault() {
   await reloadRecs();
   Object.assign(S, {unlocked:true, cat:'Todos', sel:null, dirty:false, _lastOpen:null}); bump(); render();
   if (isAdmin() && !S.recs.length) offerImport();
+  applyAccPatch();
+  if (canWrite() && docsSeed() && !localStorage.getItem('cofre_map_docseed')) loadDocs();
+  if (isAdmin() && incSeed() && !localStorage.getItem('cofre_map_incseed')) loadInc();
 }
 async function reloadRecs() {
   const rows = await SB.rpc('carregar_registros');
@@ -988,7 +994,7 @@ async function reloadRecs() {
 }
 async function lockSrv(msg) {
   logEv('bloqueio'); try { sessionStorage.setItem(LOCKED, '1'); } catch {}
-  S.inc = null; S.incLoaded = false; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
+  S.inc = null; S.incLoaded = false; S.docs = null; S.docsLoaded = false; S.docQ = ''; S.docOpen = null; S.sec = 'acessos'; S.incOpen = null; S.recs = []; S.key = null; S.unlocked = false; S.rev.clear(); S.sel = null; S.q = ''; S.menu = false; S.ru = null;
   const d = $('#dlg'); if (d && d.open) d.close();
   if (!S.me?.exige_mfa || SB.aal() !== 'aal2') return srvLogout();
   renderUnlock(msg || '');
@@ -1256,15 +1262,17 @@ async function loadInc(force) {
   } catch (e) { S.incErr = errMsg(e); S.inc = []; }
   render();
 }
-function goInc(view) { S.sec = 'inc'; S.incView = view; S.sel = null; S.mob = false; S.menu = false; if (!S.incLoaded) loadInc(); render(); }
+function goInc(view) { S.sec = 'inc'; S.incView = view; S.sel = null; S.mob = false; S.menu = false; if (!S.incLoaded) loadInc(); if (!S.docsLoaded) loadDocs(); render(); }
 function incNavHtml() {
   if (!SERVER) return '';
   const on = v => S.sec === 'inc' && S.incView === v ? 'on' : '';
   return `<h6 class="grp">Catálogo de incidentes</h6>
     <button data-inc="painel" class="${on('painel')}">${I('warn', 17)}<span>Painel e consulta</span><span class="n">${S.inc?.length ?? ''}</span></button>
+    <button data-inc="docs" class="${on('docs')}">${I('note', 17)}<span>Views Injet (documentação)</span><span class="n">${(S.docs || []).length || ''}</span></button>
     ${canWrite() ? `<button data-inc="novo" class="${on('novo')}">${I('plus', 17)}<span>Novo incidente</span></button>` : ''}`;
 }
 function incMain() {
+  if (S.incView === 'docs') return docsMain();
   const L = S.inc || [], cnt = k => L.filter(r => sevOf(r.severidade)[0] === k).length;
   const t = (S.incQ || '').toLowerCase(), f = S.incSev || '';
   const rows = L.filter(r => (!f || sevOf(r.severidade)[0] === f) && (!t || (r.id + ' ' + r.categoria + ' ' + r.subcategoria + ' ' + stripH(r.descricao) + ' ' + stripH(r.causa)).toLowerCase().includes(t)));
@@ -1274,7 +1282,7 @@ function incMain() {
     <div class="sevs">${SEV.map(([k, n, full, sla]) => `<button class="sev ${f === k ? 'on' : ''}" data-sevf="${k}" style="border-left-color:${SEVC[k]}"><b>${n}</b><span>SLA ${sla}</span><i>${cnt(k)}</i></button>`).join('')}</div>
     <div class="stats"><div><b>${L.length}</b><span>Total de registros</span></div><div><b>${cnt('critical')}</b><span>Críticos</span></div><div><b>${cnt('high')}</b><span>Severos</span></div></div>
     ${S.incView === 'novo' && canWrite() ? '' : `<div class="isrch"><input id="iq" placeholder="Buscar por ID, categoria ou descrição…" value="${esc(S.incQ || '')}" autocomplete="off"> ${f ? `<button class="btn sm" data-sevf="">Limpar filtro</button>` : ''}${isAdmin() ? ' <button class="btn sm" data-iimp="1">Importar JSON</button>' : ''}</div>
-    <div id="ilist">${rows.length ? rows.map(incCard).join('') : `<div class="empty"><b>${L.length ? 'Nenhum registro encontrado' : 'Nenhum incidente cadastrado'}</b><p>${canWrite() && !L.length ? 'Use “Novo incidente” no menu lateral.' : ''}</p></div>`}</div>`}
+    <div id="ilist">${rows.length ? rows.map(incCard).join('') : `<div class="empty"><b>${L.length ? 'Nenhum registro encontrado' : 'Nenhum incidente cadastrado'}</b><p>${canWrite() && !L.length ? 'Use “Novo incidente” no menu lateral.' : ''}</p></div>`}</div>${docsInPanel(S.incQ)}`}
   </div>`;
 }
 function incCard(r) {
@@ -1320,6 +1328,7 @@ async function incForm(id) {
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-inc],[data-sevf],[data-iopen],[data-iedit],[data-idel],[data-iimp]'); if (!t || !S.unlocked) return;
   if (t.dataset.iimp) return importInc();
+  if (t.dataset.inc === 'docs') { goInc('docs'); return; }
   if (t.dataset.inc) { if (t.dataset.inc === 'novo') { goInc('painel'); incForm(null); } else goInc('painel'); }
   else if (t.dataset.sevf !== undefined) { S.incSev = S.incSev === t.dataset.sevf ? '' : t.dataset.sevf; render(); }
   else if (t.dataset.iopen) { S.incOpen = S.incOpen === t.dataset.iopen ? null : t.dataset.iopen; render(); }
@@ -1352,6 +1361,107 @@ async function importInc() {
   };
   fi.click();
 }
+
+/* ---------- atualização de acessos embutida no arquivo ---------- */
+const accPatch = () => { try { const d = JSON.parse($('#acc-patch')?.textContent || 'null'); return d && d.tipo === 'acessos-atualizacao' ? d : null; } catch { return null; } };
+async function applyAccPatch() {
+  const P = accPatch(); if (!P || !canWrite()) return;
+  try { if (localStorage.getItem('cofre_map_accpatch') === P.versao) return; } catch {}
+  const has = (r, l, v) => (r.campos || []).some(c => c.l === l && c.v === v);
+  let nNew = 0, nAdd = 0, nFill = 0, nRep = 0, nNote = 0; const miss = [];
+  try {
+    for (const n of P.novos || []) {
+      if (S.recs.find(r => r.id === n.id || (r.titulo || '').toLowerCase() === n.titulo.toLowerCase() && r.cat === n.cat)) continue;
+      const r = JSON.parse(JSON.stringify(n)); S.recs.push(r); await persistRec(r); nNew++;
+    }
+    for (const u of P.atualizar || []) {
+      const r = S.recs.find(x => x.id === u.id); if (!r) { miss.push(u.id); continue; }
+      let ch = false; r.campos = r.campos || [];
+      for (const c of u.add || []) if (!has(r, c.l, c.v)) { r.campos.push({...c}); nAdd++; ch = true; }
+      for (const f of u.fill || []) { const c = r.campos.find(x => x.l === f.l); if (c && !c.v) { c.v = f.v; nFill++; ch = true; } else if (!c) { r.campos.push({g:'AnyDesk', l:f.l, v:f.v, s:/senha/i.test(f.l)}); nFill++; ch = true; } }
+      for (const p of u.replace || []) { const c = r.campos.find(x => x.l === p.l); if (c && c.v !== p.v) { if (p.keepOldAs && c.v) r.campos.push({g:c.g, l:p.keepOldAs, v:c.v, s:true}); c.v = p.v; nRep++; ch = true; } }
+      for (const l of u.anot || []) { r.anot = r.anot || []; if (!r.anot.includes(l)) { r.anot.push(l); nNote++; ch = true; } }
+      if (ch) await persistRec(r);
+    }
+    try { localStorage.setItem('cofre_map_accpatch', P.versao); } catch {}
+    render(); toast(`Acessos atualizados: ${nNew} novo(s), ${nAdd + nFill + nRep} campo(s), ${nNote} linha(s) de texto` + (miss.length ? ' · não achei: ' + miss.join(', ') : ''));
+  } catch (e) { toast('Falha ao atualizar acessos: ' + errMsg(e)); }
+}
+
+/* ---------- documentação técnica: Views Injet ---------- */
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+async function loadDocs(force) {
+  if (!SERVER || (S.docsLoaded && !force)) return;
+  S.docsErr = '';
+  try {
+    const rows = await SB.rpc('listar_documentos'), out = [];
+    for (const r of rows) { try { out.push({...(await openRec(S.key, r.blob, r.id)), id:r.id}); } catch {} }
+    S.docs = out; S.docsLoaded = true;
+    if (!out.length && canWrite() && !localStorage.getItem('cofre_map_docseed')) { const sd = docsSeed(); if (sd) { await importDocsList(sd); return; } }
+  } catch (e) { S.docsErr = errMsg(e); S.docs = []; }
+  render();
+}
+const docsSeed = () => { try { const d = JSON.parse($('#docs-seed')?.textContent || 'null'); return d && d.tipo === 'documentos-views' && d.docs?.length ? d : null; } catch { return null; } };
+async function importDocsList(d) {
+  let n = 0;
+  try {
+    for (const x of d.docs) { await SB.rpc('salvar_documento', {p_id:x.id, p_blob:await sealRec(S.key, x, x.id)}); n++; }
+    try { localStorage.setItem('cofre_map_docseed', '1'); } catch {}
+    toast(n + ' documento(s) de views Injet importado(s)');
+  } catch (e) { toast('Falha ao importar documentação: ' + errMsg(e)); }
+  await loadDocs(true);
+}
+function docMatch(d, q) {
+  if (!q) return {hit:true, fields:null, items:null};
+  const t = norm(q), has = s => norm(s).includes(t);
+  if (d.tipo === 'memorial') { const it = (d.itens || []).filter(i => has(i.ind) || has(i.desc)); return {hit:it.length > 0 || has(d.titulo), fields:null, items:it}; }
+  if (d.tipo === 'geral') return {hit:has(d.titulo) || has(d.objetivo) || (d.observacoes || []).some(has), fields:null, items:null};
+  const f = (d.campos || []).filter(c => has(c.campo) || has(c.desc) || has(c.tipo));
+  return {hit:has(d.titulo) || has(d.descricao) || has(d.categoria) || f.length > 0, fields:f, items:null};
+}
+function docCard(d, q, open) {
+  const m = docMatch(d, q), isOpen = open || (q && (m.fields?.length || m.items?.length) && S.docOpen !== '-' + d.id);
+  const tag = d.tipo === 'view' ? `<span class="chip">${esc(d.categoria)}</span>` : `<span class="chip">${esc(d.categoria)}</span>`;
+  let body = '';
+  if (isOpen) {
+    if (d.tipo === 'view') {
+      const fl = (q && m.fields?.length && !norm(d.titulo).includes(norm(q))) ? m.fields : d.campos;
+      body = `<div class="ib2"><div>${esc(d.descricao)} ${d.obs ? `<br><b>${esc(d.obs)}</b>` : ''}</div>
+        <div class="mut" style="font-size:12px">${d.campos.length} campos · ${d.campos.filter(c => c.agrup).length} de agrupamento · seção ${esc(d.secao)} do documento (pág. ${d.pagina}) · ${esc(d.origem)}</div>
+        <div style="overflow:auto"><table class="tbl dtb"><thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead><tbody>${fl.map(c => `<tr><td class="mono">${esc(c.campo)}${c.agrup ? ' <span class="chip" title="Campo de agrupamento (amarelo no documento original)">agrup.</span>' : ''}</td><td class="mono">${esc(c.tipo)}</td><td>${esc(c.desc)}</td></tr>`).join('')}</tbody></table></div>
+        ${fl.length < d.campos.length ? `<div class="mut" style="font-size:12px">Mostrando ${fl.length} de ${d.campos.length} campos que correspondem à busca.</div>` : ''}</div>`;
+    } else if (d.tipo === 'memorial') {
+      const il = q && m.items?.length ? m.items : d.itens;
+      body = `<div class="ib2"><div class="mut">${esc(d.nota)}</div>${[...new Set(il.map(i => i.grupo))].map(g => `<div><b>${esc(g)}</b>${il.filter(i => i.grupo === g).map(i => `<div class="rich"><b>${esc(i.ind)}</b><br>${esc(i.desc)}</div>`).join('')}</div>`).join('')}</div>`;
+    } else body = `<div class="ib2"><div>${esc(d.objetivo)}</div><ul>${(d.observacoes || []).map(o => `<li>${esc(o)}</li>`).join('')}</ul><div class="mut" style="font-size:12px">Fonte: ${esc(d.origem)} (versão ${esc(d.versao)})</div></div>`;
+  }
+  const sub = d.tipo === 'view' ? esc(d.descricao).slice(0, 110) : d.tipo === 'memorial' ? `${d.itens.length} indicadores e fórmulas` : 'Objetivo, observações e categorias';
+  return `<div class="icard"><div class="ih" data-dopen="${esc(d.id)}"><span class="mono idt">${esc(d.titulo.length > 30 ? d.titulo.slice(0, 30) + '…' : d.titulo)}</span><span class="idesc">${sub}${q && m.fields?.length ? ` · <b>${m.fields.length} campo(s) encontrado(s)</b>` : ''}</span>${tag}</div>${body}</div>`;
+}
+function docsMain() {
+  const D = S.docs || [], q = S.docQ || '', cat = S.docCat || '';
+  const cats = [...new Set(D.filter(d => d.tipo !== 'geral').map(d => d.categoria))];
+  const rows = D.filter(d => (!cat || d.categoria === cat) && docMatch(d, q).hit);
+  return `<div class="inc" style="grid-column:2/4;overflow:auto;padding:18px 22px">
+    <h2 style="margin:0 0 2px">Views Injet — documentação</h2><p style="margin:0 0 14px;color:var(--mut)">Views, campos, tipos e memorial de cálculo · fonte: Views_Injet_12_06_2024.pdf · dados criptografados no servidor</p>
+    ${S.docsErr ? `<p class="err">${esc(S.docsErr)}</p>` : ''}
+    <div class="isrch"><input id="dq" placeholder="Buscar view, campo, indicador ou fórmula (ex.: OEE, cdmolde, refugo)…" value="${esc(q)}" autocomplete="off"></div>
+    <div class="stats">${['', ...cats].map(c => `<button class="btn sm ${cat === c ? 'pri' : ''}" data-dcat="${esc(c)}">${c || 'Todas'}</button>`).join(' ')}</div>
+    <div id="dlist">${rows.length ? rows.map(d => docCard(d, q, S.docOpen === d.id)).join('') : `<div class="empty"><b>${D.length ? 'Nada encontrado' : 'Nenhum documento carregado'}</b></div>`}</div></div>`;
+}
+function docsInPanel(q) {
+  const D = S.docs || []; if (!q || q.length < 2 || !D.length) return '';
+  const hits = D.filter(d => d.tipo !== 'geral' && docMatch(d, q).hit); if (!hits.length) return '';
+  return `<h3 style="margin:18px 0 8px">Documentação Views Injet <span class="mut" style="font-weight:400;font-size:13px">· ${hits.length} resultado(s)</span></h3>${hits.slice(0, 8).map(d => docCard(d, q, false)).join('')}${hits.length > 8 ? `<button class="btn sm" data-inc="docs">Ver todos os ${hits.length} na documentação</button>` : ''}`;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-dopen],[data-dcat]'); if (!t || !S.unlocked) return;
+  if (t.dataset.dcat !== undefined) { S.docCat = t.dataset.dcat; render(); return; }
+  const id = t.dataset.dopen;
+  if (S.incView !== 'docs') { S.incView = 'docs'; S.docQ = S.incQ || ''; S.docOpen = id; render(); return; }
+  S.docOpen = S.docOpen === id ? '-' + id : id; render();
+});
+document.addEventListener('input', e => { if (e.target.id === 'dq') { S.docQ = e.target.value; S.docOpen = null; const p = e.target.selectionStart; render(); const n = $('#dq'); n.focus(); n.setSelectionRange(p, p); } });
 
 if (VIEW) bootViewer(VIEW[1], VIEW[2]); else if (SERVER) bootServer(); else if (AUTO) autoUnlock(); else renderLock('');
 </script>

@@ -480,3 +480,49 @@ grant execute on function public.listar_incidentes(), public.novo_id_incidente()
 
 -- Authenticator obrigatório apenas para Henrique Ribeiro:
 update public.perfis set exige_mfa = true where lower(email) = 'suportemapai@gmail.com';
+
+-- ---------- documentação técnica (Views Injet etc.) ----------
+create table if not exists public.documentos (
+  id             text primary key,
+  blob           jsonb not null,
+  criado_em      timestamptz not null default now(),
+  atualizado_em  timestamptz not null default now(),
+  criado_por     uuid,
+  atualizado_por uuid
+);
+alter table public.documentos enable row level security;
+revoke all on public.documentos from anon, authenticated;
+
+create or replace function public.listar_documentos() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis;
+begin
+  p := public._perfil_ativo();
+  return coalesce((select jsonb_agg(jsonb_build_object('id', id, 'blob', blob, 'atualizado_em', atualizado_em) order by id) from public.documentos), '[]'::jsonb);
+end $$;
+
+create or replace function public.salvar_documento(p_id text, p_blob jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis; novo boolean;
+begin
+  p := public._perfil_ativo();
+  if p.papel not in ('admin', 'suporte') then raise exception 'sem_permissao' using errcode = '42501'; end if;
+  if p_id !~ '^DOC-[A-Za-z0-9_.-]{2,80}$' then raise exception 'id_invalido'; end if;
+  novo := not exists (select 1 from public.documentos where id = p_id);
+  insert into public.documentos (id, blob, criado_por, atualizado_por) values (p_id, p_blob, p.id, p.id)
+  on conflict (id) do update set blob = excluded.blob, atualizado_por = p.id, atualizado_em = now();
+  perform public._log(p.id, p.email, case when novo then 'documento_criado' else 'documento_editado' end, p_id, null, null, null);
+end $$;
+
+create or replace function public.excluir_documento(p_id text) returns void
+language plpgsql security definer set search_path = public as $$
+declare p public.perfis;
+begin
+  p := public._perfil_ativo();
+  if p.papel <> 'admin' then raise exception 'somente_admin' using errcode = '42501'; end if;
+  delete from public.documentos where id = p_id;
+  perform public._log(p.id, p.email, 'documento_excluido', p_id, null, null, null);
+end $$;
+
+revoke all on function public.listar_documentos(), public.salvar_documento(text, jsonb), public.excluir_documento(text) from public, anon, authenticated;
+grant execute on function public.listar_documentos(), public.salvar_documento(text, jsonb), public.excluir_documento(text) to authenticated;
